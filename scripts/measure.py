@@ -28,6 +28,7 @@ import cv2  # noqa: E402
 from eyes import decode as decode_mod  # noqa: E402
 from eyes import keys as keys_mod  # noqa: E402
 from eyes import metrics as metrics_mod  # noqa: E402
+from eyes import przebieg as przebieg_mod  # noqa: E402
 from eyes import probe as probe_mod  # noqa: E402
 from eyes import report as report_mod  # noqa: E402
 from eyes import scopes as scopes_mod  # noqa: E402
@@ -121,11 +122,16 @@ def process_file(path: Path, *, args, cfg, hash_by_path: dict, file_paths: list[
         target_w=TARGET_WIDTH, lut_dir=lut_dir, lut_name=lut_name,
         grayscale=False, use_gpu=not args.no_gpu,
     )
-    # bez LUT - ruch nie potrzebuje LUT (kolor/tonalnosc nie sa tu liczone).
+    # Z LUT dla Fuji (jak dec_a, ten sam lut_dir/lut_name - None dla innych
+    # kamer) - probka B teraz tez zasila tonalnosc.profil (jasnosc po LUT w
+    # czasie), nie tylko ruch. `long_range=True`: lut3d (jesli dotyczy) i
+    # scale dzialaja na malych klatkach niezaleznie od GPU/CPU - patrz
+    # eyes/decode.py, inaczej interpolacja 3D na do ~1800 klatkach w pelnej
+    # rozdzielczosci zrodla zjadlaby budzet czasowy pomiaru.
     dec_b = decode_mod.decode_frames(
         str(path), 0.0, dlugosc_b, fps=fps_b, orig_w=info["w"], orig_h=info["h"],
-        target_w=TARGET_WIDTH, lut_dir=None, lut_name=None,
-        grayscale=True, use_gpu=not args.no_gpu,
+        target_w=TARGET_WIDTH, lut_dir=lut_dir, lut_name=lut_name,
+        grayscale=False, use_gpu=not args.no_gpu, long_range=True,
     )
 
     t_decode_total = dec_a["decode_time_s"] + dec_b["decode_time_s"]
@@ -133,15 +139,34 @@ def process_file(path: Path, *, args, cfg, hash_by_path: dict, file_paths: list[
     gpu_fallback = bool(dec_a["gpu_fallback"] or dec_b["gpu_fallback"])
 
     frames_a = dec_a["frames"]
-    frames_b = dec_b["frames"]
+    frames_rgb_b = dec_b["frames"]
 
     tonalnosc = metrics_mod.compute_tonalnosc(frames_a)
     kolor = metrics_mod.compute_kolor(frames_a)
     ostrosc, idx_sharp = metrics_mod.compute_ostrosc(frames_a)
     szum = metrics_mod.compute_szum(frames_a[idx_sharp])
-    ruch = metrics_mod.compute_ruch(frames_b, fps_b=fps_b, target_width=dec_b["width"])
+
+    # Luma BT.709 RAZ (float32 - patrz metrics.luma709_f32) dla probki B,
+    # dzielona miedzy profil jasnosci (nowe) i szarosc dla compute_ruch/
+    # compute_plynnosc (dostaja dokladnie ten sam ksztalt/typ danych (n,h,w)
+    # uint8 co dawny ffmpeg `format=gray`, wiec ich wyniki nie zmieniaja sie
+    # poza szumem numerycznym metody konwersji) - liczenie lumy z RGB dwa
+    # razy osobno (raz do profilu, raz do szarosci) na buforze do ~350 MB
+    # (180 s x 5 kl/s x 480x270x3) kosztowalo za duzo czasu (zmierzone: dla
+    # GoPro >150 s ~+6 s zamiast budzetowanych +3 s - narzut byl prawie
+    # wylacznie w tym podwojnym przeliczeniu, nie w samym dekodowaniu/LUT).
+    # Bufor RGB zwalniamy zaraz potem - nie jest juz potrzebny.
+    y_b = metrics_mod.luma709_f32(frames_rgb_b)
+    tonalnosc["profil"] = metrics_mod.profil_jasnosci_z_lumy(y_b, fps_b)
+    frames_gray_b = metrics_mod.to_gray709_z_lumy(y_b)
+    n_klatek_b = frames_gray_b.shape[0]
+    del y_b
+    del frames_rgb_b
+    dec_b["frames"] = None
+
+    ruch = metrics_mod.compute_ruch(frames_gray_b, fps_b=fps_b, target_width=dec_b["width"])
     ruch["obcieto_s"] = obciete_s
-    plynnosc = metrics_mod.compute_plynnosc(frames_b, info["fps"], info["fps_avg"])
+    plynnosc = metrics_mod.compute_plynnosc(frames_gray_b, info["fps"], info["fps_avg"])
     montaz = metrics_mod.compute_montaz(duration)
     flagi = metrics_mod.compute_flagi(tonalnosc, ostrosc, ruch)
 
@@ -190,7 +215,7 @@ def process_file(path: Path, *, args, cfg, hash_by_path: dict, file_paths: list[
     okno = {
         "start_s": start_s, "koniec_s": koniec_s,
         "fps_probki_a": FPS_A, "fps_probki_b": fps_b, "szerokosc_px": TARGET_WIDTH,
-        "liczba_klatek_a": int(frames_a.shape[0]), "liczba_klatek_b": int(frames_b.shape[0]),
+        "liczba_klatek_a": int(frames_a.shape[0]), "liczba_klatek_b": int(n_klatek_b),
     }
     niepewnosc = {
         "pomiar_bez_lut": bool(kamera == "Fuji" and lut_name is None),
@@ -217,6 +242,11 @@ def process_file(path: Path, *, args, cfg, hash_by_path: dict, file_paths: list[
         plynnosc=plynnosc, montaz=montaz, klatki=klatki, skopy=skopy,
         flagi=flagi, progi=metrics_mod.PROGI_PROWIZORYCZNE, niepewnosc=niepewnosc, pomiar=pomiar,
     )
+
+    przebieg_path = scopes_dir / f"{id_}_przebieg.png"
+    if przebieg_mod.render_przebieg(report, przebieg_path) is not None:
+        report["skopy"].append({"typ": "przebieg", "t_s": None, "plik": rel_to(przebieg_path, cache_root)})
+
     report_mod.write_report(report, report_path)
 
     gpu_txt = "tak" if gpu_used else "nie"

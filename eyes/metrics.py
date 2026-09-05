@@ -64,6 +64,44 @@ def to_luma709(frames_rgb: np.ndarray) -> np.ndarray:
     return 0.2126 * f[..., 0] + 0.7152 * f[..., 1] + 0.0722 * f[..., 2]
 
 
+def luma709_f32(frames_rgb: np.ndarray) -> np.ndarray:
+    """Jak to_luma709, ale float32 (nie float64) - polowa pamieci/
+    przepustowosci na konwersji. Uzywane WYLACZNIE dla duzego bufora probki B
+    (do 180 s x 5-10 kl/s x 480x270x3 ~= do 350 MB uint8 - konwersja do
+    float64 podwoilaby to na czas przeliczenia, a wynik i tak koncowo wraca
+    do uint8 (to_gray709_z_lumy) albo jest zaokraglany do 3 miejsc w
+    raporcie (profil_jasnosci_z_lumy), wiec float32 nie traci tu precyzji,
+    ktorej cokolwiek by uzylo). compute_tonalnosc (okno A, ~40 klatek) zostaje
+    przy to_luma709/float64 - nie ma powodu ruszac juz ustalonych wartosci
+    tonalnosci dla oszczednosci, ktora na malym buforze jest nieistotna."""
+    r = frames_rgb[..., 0].astype(np.float32)
+    g = frames_rgb[..., 1].astype(np.float32)
+    b = frames_rgb[..., 2].astype(np.float32)
+    y = r * np.float32(0.2126 / 255.0)
+    y += g * np.float32(0.7152 / 255.0)
+    y += b * np.float32(0.0722 / 255.0)
+    return y
+
+
+def to_gray709_z_lumy(y: np.ndarray) -> np.ndarray:
+    """Luma 0..1 (dowolny float) -> (n,h,w) uint8 szarosc 0..255."""
+    return np.clip(np.round(y * 255.0), 0, 255).astype(np.uint8)
+
+
+def to_gray709(frames_rgb: np.ndarray) -> np.ndarray:
+    """(n,h,w,3) uint8 RGB -> (n,h,w) uint8 szarosc BT.709 (0.2126/0.7152/
+    0.0722, jak to_luma709, tylko z powrotem w 0..255). Zastepuje dawny
+    `format=gray` ffmpeg (BT.601) dla probki B (ruch/plynnosc) - te funkcje
+    oczekuja dokladnie tego samego ksztaltu/typu danych (n,h,w) uint8 co
+    wczesniej, wiec wynik jest ten sam poza szumem numerycznym metody
+    konwersji (patrz eyes/decode.py, dec_b w scripts/measure.py). Gdy luma
+    jest juz policzona gdzie indziej (np. profil_jasnosci_z_lumy w tym samym
+    wywolaniu - patrz scripts/measure.py), wolaj to_gray709_z_lumy na niej
+    zamiast tej funkcji, zeby nie liczyc lumy z RGB dwa razy na duzym
+    buforze."""
+    return to_gray709_z_lumy(luma709_f32(frames_rgb))
+
+
 def compute_tonalnosc(frames_rgb: np.ndarray) -> dict:
     y = to_luma709(frames_rgb)
     flat = y.reshape(-1)
@@ -79,6 +117,41 @@ def compute_tonalnosc(frames_rgb: np.ndarray) -> dict:
         "clip_lo_pct": clip_lo_pct, "clip_hi_pct": clip_hi_pct,
         "kontrast_rms": kontrast_rms, "p50_rozrzut": p50_rozrzut,
     }
+
+
+def profil_jasnosci_z_lumy(y: np.ndarray, fps_b: float) -> list[dict]:
+    """Jak compute_profil_jasnosci, ale z JUZ policzonej lumy (n,h,w), 0..1,
+    dowolny float) zamiast surowych klatek RGB - dla scripts/measure.py,
+    gdzie ta sama luma sluzy tez do szarosci probki B (to_gray709_z_lumy),
+    zeby nie liczyc jej z RGB dwa razy na duzym buforze (patrz luma709_f32).
+
+    Profil co PELNA sekunde: percentyle 5/50/99 ze wszystkich pikseli klatek
+    danej sekundy naraz. "Pelna sekunda" = ma komplet `round(fps_b)` klatek -
+    ostatnia, niepelna sekunda (gdy liczba klatek nie jest wielokrotnoscia
+    fps_b) jest pomijana, zeby percentyle nie liczyly sie z garstki klatek.
+    Zaokraglenie do 3 miejsc dzieje sie pozniej, przy skladaniu raportu
+    (eyes/report.py:round_floats) - tak samo jak reszta metryk tonalnosci."""
+    n = y.shape[0]
+    fps_b_int = int(round(fps_b))
+    if fps_b_int <= 0:
+        return []
+    n_sec = n // fps_b_int
+    profil = []
+    for sek in range(n_sec):
+        i0, i1 = sek * fps_b_int, (sek + 1) * fps_b_int
+        p5, p50, p99 = np.percentile(y[i0:i1].reshape(-1), [5, 50, 99])
+        profil.append({"t_s": sek, "p5": float(p5), "p50": float(p50), "p99": float(p99)})
+    return profil
+
+
+def compute_profil_jasnosci(frames_rgb_b: np.ndarray, fps_b: float) -> list[dict]:
+    """Profil jasnosci co PELNA sekunde z probki B (caly klip, z LUT dla
+    Fuji - patrz plan_probkowania_ruchu i dec_b w scripts/measure.py):
+    percentyle 5/50/99 lumy BT.709 (0..1) ze wszystkich pikseli klatek danej
+    sekundy naraz - patrz profil_jasnosci_z_lumy (uzyj tamtej bezposrednio
+    zamiast tej funkcji, gdy luma jest juz policzona gdzie indziej w tym
+    samym wywolaniu - patrz scripts/measure.py)."""
+    return profil_jasnosci_z_lumy(luma709_f32(frames_rgb_b), fps_b)
 
 
 def compute_kolor(frames_rgb: np.ndarray) -> dict:

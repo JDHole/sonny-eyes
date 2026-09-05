@@ -82,9 +82,17 @@ def main(argv=None) -> int:
         n_kuba += 1 if wk else 0
         cegla = data_uri(project_cache / i / "frames" / f"{i}_najostrzejsza.png")
         wave = data_uri(project_cache / i / "scopes" / f"{i}_waveform.png")
-        ruch_png = data_uri(project_cache / i / "scopes" / f"{i}_ruch.png")
+        ruch_png = data_uri(project_cache / i / "scopes" / f"{i}_przebieg.png")
         klasa = "+".join(m.get("klasa", []) or [])
         jitter = m.get("jitter_rms_pct")
+        wersja = str(r.get("wersja_metryk", ""))
+        if m.get("mediana_jitter_srodka_pct") is not None:
+            jitter_txt = f"drganie środka (mediana) {fmt(m.get('mediana_jitter_srodka_pct'), 2, '%')}"
+            jitter_sort = m.get("mediana_jitter_srodka_pct") or 0
+        else:
+            jitter_txt = f"jitter {fmt(jitter, 2, '%')}"
+            jitter_sort = jitter or 0
+        ver_html = f'<span class="vwarn">v{html.escape(wersja)} niewiarygodne</span>' if wersja == "0.1" else f'<span class="vok">v{html.escape(wersja)}</span>'
         nazwa = pr.get("nazwa") or i
         flags_html = "".join(f'<span class="chip chip-{"bad" if f.startswith("clip_hi") or f == "trzesie" else "warn"}">{html.escape(f)}</span>' for f in flags) or '<span class="chip chip-ok">bez flag</span>'
         kuba_html = ""
@@ -103,7 +111,7 @@ def main(argv=None) -> int:
         srodek_txt = f' &middot; środek {srodek["od_s"]}-{srodek["do_s"]} s' if isinstance(srodek, dict) and srodek else ""
         imgs = [("cegla", cegla, "cegła"), ("wave", wave, "waveform")]
         if ruch_png:
-            imgs.append(("ruch", ruch_png, "ruch w czasie"))
+            imgs.append(("ruch", ruch_png, "przebieg"))
         img_btns = "".join(f'<button type="button" class="imgbtn{" active" if n == 0 else ""}" data-img="{key}">{lab}</button>' for n, (key, _, lab) in enumerate(imgs) if _)
         img_data = " ".join(f'data-{key}="{uri}"' for key, uri, _ in imgs if uri and key != "cegla")  # cegla jest juz w src
         cards.append(f"""
@@ -124,7 +132,7 @@ def main(argv=None) -> int:
     <div><dt>przepał</dt><dd>{fmt(t.get('clip_hi_pct'), 2, '%')}</dd></div>
     <div><dt>ostrość</dt><dd>{fmt(o.get('lapvar'), 0)}</dd></div>
     <div><dt>nasycenie</dt><dd>{fmt(k.get('sat_mean'))}</dd></div>
-    <div class="wide"><dt>ruch <span class="v{r.get('wersja_metryk', '')}">v{html.escape(str(r.get('wersja_metryk', '')))}</span></dt><dd>{html.escape(klasa or '-')} &middot; jitter {fmt(jitter, 2, '%')}{srodek_txt}</dd></div>
+    <div class="wide"><dt>ruch {ver_html}</dt><dd>{html.escape(klasa or '-')} &middot; {jitter_txt}{srodek_txt}</dd></div>
   </dl>
   <div class="flags">{flags_html}</div>
   {kuba_html}{hist_html}{note_html}

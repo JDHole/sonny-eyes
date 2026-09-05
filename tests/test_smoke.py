@@ -135,12 +135,41 @@ def main() -> int:
     # DSCF3066 - hero Anagi, ogolnie bardziej shaky niz 1414 (porownanie median).
     # DSCF2988 - statyw, klasa "static", jitter srodka < 0.05.
     ruch_cases = {}
+    reports_ruch = {}
     for ruch_id in ("DSCF1414", "DSCF3066", "DSCF2988"):
         rp = report_dir / f"{ruch_id}.json"
         if not rp.exists():
             check(False, f"kalibracja ruchu: brak raportu {ruch_id} (odpal measure.py --force na tym klipie)")
             continue
-        ruch_cases[ruch_id] = json.loads(rp.read_text(encoding="utf-8")).get("ruch", {})
+        dane = json.loads(rp.read_text(encoding="utf-8"))
+        reports_ruch[ruch_id] = dane
+        ruch_cases[ruch_id] = dane.get("ruch", {})
+
+    # --- tonalnosc.profil + skop "przebieg" (v0.3): te 3 raporty sa zawsze
+    # swieze (regenerowane przez bramke measure.py --force wyzej), wiec
+    # profil MUSI tu byc - w odroznieniu od CASES powyzej (DSCF3236/GX010042),
+    # ktore moga byc starsze i profilu jeszcze nie miec (regeneracja to
+    # osobna decyzja, jak przy ruch v0.2 - patrz komentarz nad CASES).
+    for ruch_id, dane in reports_ruch.items():
+        profil = (dane.get("tonalnosc") or {}).get("profil")
+        check(isinstance(profil, list) and len(profil) > 0, f"{ruch_id}: tonalnosc.profil puste/brak")
+        for p in profil or []:
+            check(isinstance(p.get("t_s"), int), f"{ruch_id}: profil_jasnosci.t_s={p.get('t_s')} nie jest int")
+            for k in ("p5", "p50", "p99"):
+                v = p.get(k)
+                check(isinstance(v, (int, float)) and 0.0 <= v <= 1.0, f"{ruch_id}: profil_jasnosci.{k}={v} poza 0..1 (t_s={p.get('t_s')})")
+            if all(p.get(k) is not None for k in ("p5", "p50", "p99")):
+                check(p["p5"] <= p["p50"] <= p["p99"], f"{ruch_id}: profil_jasnosci {p} nie rosnie monotonicznie")
+
+        skopy_ruch = dane.get("skopy") or []
+        przebiegi = [s for s in skopy_ruch if s.get("typ") == "przebieg"]
+        check(len(przebiegi) == 1, f"{ruch_id}: oczekiwano dokladnie 1 wpisu skopy typu 'przebieg', jest {len(przebiegi)}")
+        for s in przebiegi:
+            check(s.get("t_s") is None, f"{ruch_id}: skop przebieg t_s={s.get('t_s')} oczekiwano null")
+            pp = cache_root / s["plik"]
+            check(pp.exists(), f"{ruch_id}: brak pliku przebiegu {pp}")
+            if pp.exists():
+                check(pp.stat().st_size <= MAX_PNG_BYTES, f"{ruch_id}: {pp} > 500 KB ({pp.stat().st_size} B)")
 
     if len(ruch_cases) == 3:
         r1414, r3066, r2988 = ruch_cases["DSCF1414"], ruch_cases["DSCF3066"], ruch_cases["DSCF2988"]

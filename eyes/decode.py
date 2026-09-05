@@ -10,7 +10,11 @@ dwukropka, bez spacji do escapowania).
 Kolejnosc filtrow: fps NAJPIERW (dropuje klatki tanio), dopiero potem
 format/lut3d/scale na tych juz przetrzebionych klatkach - inaczej lut3d
 (kosztowna interpolacja 3D) liczy sie na kazdej zdekodowanej klatce w pelnej
-rozdzielczosci zamiast tylko na probkowanych.
+rozdzielczosci zamiast tylko na probkowanych. To jest OK dla okna A (max ~40
+klatek) - patrz `lut_after_scale`/`long_range` nizej dla dlugich zakresow
+(cala dlugosc klipu, do 180 s), gdzie lut3d MUSI dzialac na juz zmniejszonych
+klatkach (480 px), inaczej interpolacja 3D na kazdej z nawet ~1800 klatek w
+pelnej rozdzielczosci 4K zjada budzet czasowy pomiaru.
 """
 from __future__ import annotations
 
@@ -45,27 +49,60 @@ def compute_scaled_size(orig_w: int, orig_h: int, target_w: int) -> tuple[int, i
     return target_w, h
 
 
-def _build_filter(scaled_w: int, scaled_h: int, fps: float, lut_name: str | None, grayscale: bool) -> str:
+def _build_filter(
+    scaled_w: int, scaled_h: int, fps: float, lut_name: str | None, grayscale: bool,
+    lut_after_scale: bool = False,
+) -> str:
+    """`lut_after_scale=True` przesuwa `lut3d` ZA `scale` (LUT na malych,
+    480px klatkach zamiast na pelnej rozdzielczosci zrodla) - patrz modul
+    docstring. Uzywane dla dlugich zakresow (`decode_frames(..., long_range=
+    True)`); domyslnie False zachowuje dotychczasowa kolejnosc (okno A)."""
     parts = [f"fps={fps}"]
-    if lut_name:
+    if lut_name and not lut_after_scale:
         parts.append("format=rgb24")
         parts.append(f"lut3d=file={lut_name}")
     parts.append(f"scale={scaled_w}:{scaled_h}")
+    if lut_name and lut_after_scale:
+        parts.append("format=rgb24")
+        parts.append(f"lut3d=file={lut_name}")
+        if grayscale:
+            parts.append("format=gray")
+        return ",".join(parts)
     parts.append("format=gray" if grayscale else "format=rgb24")
     return ",".join(parts)
 
 
-def _build_filter_gpu_gray(scaled_w: int, scaled_h: int, fps: float) -> str:
-    """Wariant GPU dla dekodowania bez LUT w skali szarosci (ruch): `scale_cuda`
-    PRZED `fps`, odwrotnie niz w `_build_filter`. Bez LUT nie ma drogiego kroku
-    CPU ktory usprawiedliwia dropowanie klatek jak najwczesniej - a poniewaz
-    `fps` nie ma wariantu CUDA, ffmpeg i tak musi zrobic `hwdownload` klatki na
-    CPU zanim `fps` moze cokolwiek odrzucic. Skalujac NAJPIERW na GPU do
-    docelowych ~480 px, `hwdownload` przenosi juz male klatki zamiast pelnej
-    rozdzielczosci zrodla - dla dlugich zakresow (caly klip, do 180 s) to
-    realna oszczednosc (zmierzone: ~28% szybciej na 115 s klipu 4K 10-bit).
-    Wymaga wywolania z `-hwaccel_output_format cuda`."""
-    return f"scale_cuda=w={scaled_w}:h={scaled_h}:format=nv12,hwdownload,format=nv12,format=gray,fps={fps}"
+def _build_filter_gpu_smallfirst(
+    scaled_w: int, scaled_h: int, fps: float, lut_name: str | None, grayscale: bool,
+) -> str:
+    """Wariant GPU 'male klatki najpierw': `scale_cuda` + `hwdownload` (i LUT,
+    jesli dotyczy) PRZED `fps`, odwrotnie niz w `_build_filter`. Bez tego,
+    dla dlugich zakresow (caly klip, do 180 s) `fps` (ktory nie ma wariantu
+    CUDA) wymusza `hwdownload` KAZDEJ zdekodowanej klatki w pelnej
+    rozdzielczosci zrodla, zanim cokolwiek moze zostac odrzucone - `fps` w
+    filtergraphie odrzuca klatki PO dekodowaniu/hwdownload, nie przed.
+    Skalujac NAJPIERW na GPU do docelowych ~480 px, `hwdownload` dziala na
+    malych klatkach - dla dlugich zakresow to realna oszczednosc (zmierzone
+    bez LUT: ~28% szybciej na 115 s klipu 4K 10-bit; patrz README 'Metryka
+    ruchu v0.2' pkt 7). Bez LUT (`lut_name=None`) daje dokladnie ten sam
+    filtrgraf co dawniejsze `_build_filter_gpu_gray` (fps na koncu - tania
+    konwersja formatu, nie ma powodu przycinac przed nia). Z LUT: `fps`
+    (dropujac do docelowego fps) idzie PRZED `lut3d`, zeby kosztowna
+    interpolacja 3D dostala tylko faktycznie probkowane male klatki, a nie
+    kazda natywna klatke zrodla - "male klatki" (ten wariant) + "male fps"
+    (kolejnosc filtrow) razem. Wymaga wywolania z `-hwaccel_output_format
+    cuda`."""
+    parts = [f"scale_cuda=w={scaled_w}:h={scaled_h}:format=nv12", "hwdownload", "format=nv12"]
+    if lut_name:
+        parts.append("format=rgb24")
+        parts.append(f"fps={fps}")
+        parts.append(f"lut3d=file={lut_name}")
+        if grayscale:
+            parts.append("format=gray")
+        return ",".join(parts)
+    parts.append("format=gray" if grayscale else "format=rgb24")
+    parts.append(f"fps={fps}")
+    return ",".join(parts)
 
 
 def _run(cmd: list[str], cwd: str | None) -> subprocess.CompletedProcess:
@@ -84,30 +121,41 @@ def decode_frames(
     lut_name: str | None = None,
     grayscale: bool = False,
     use_gpu: bool = True,
+    long_range: bool = False,
 ) -> dict:
     """Dekoduje okno [start_s, start_s+duration_s) na klatki numpy.
+
+    `long_range=True` (uzywane przy pelnej dlugosci klipu, do 180 s - ruch +
+    tonalnosc.profil) przelacza na filtrgraf 'male klatki najpierw': z GPU -
+    `_build_filter_gpu_smallfirst` (scale_cuda+hwdownload przed fps), bez GPU
+    (fallback CPU) - `_build_filter` z `lut_after_scale=True` (lut3d po scale,
+    nie przed). Domyslnie (False, okno A) zachowuje dotychczasowy filtrgraf
+    bez zmian.
 
     Zwraca dict: frames (n,h,w,3) uint8 albo (n,h,w) gdy grayscale, gpu_used,
     gpu_fallback, decode_time_s, width, height.
     """
     scaled_w, scaled_h = compute_scaled_size(orig_w, orig_h, target_w)
-    vf = _build_filter(scaled_w, scaled_h, fps, lut_name, grayscale)
+    vf = _build_filter(scaled_w, scaled_h, fps, lut_name, grayscale, lut_after_scale=long_range)
     channels = 1 if grayscale else 3
     pix_fmt = "gray" if grayscale else "rgb24"
     cwd = lut_dir if lut_name else None
 
-    # Bez LUT + skala szarosci + GPU: uzyj scale_cuda-przed-fps (patrz
-    # _build_filter_gpu_gray). Z LUT (dec_a) albo bez GPU (fallback CPU):
-    # oryginalny lancuch `vf` bez zmian.
-    gpu_gray_vf = _build_filter_gpu_gray(scaled_w, scaled_h, fps) if (grayscale and not lut_name) else None
+    # long_range + GPU: uzyj scale_cuda-przed-fps (patrz
+    # _build_filter_gpu_smallfirst). Okno A albo brak GPU (fallback CPU):
+    # `vf` powyzej (z lut_after_scale wg long_range).
+    gpu_smallfirst_vf = (
+        _build_filter_gpu_smallfirst(scaled_w, scaled_h, fps, lut_name, grayscale)
+        if long_range else None
+    )
 
     def cmd_for(gpu: bool) -> list[str]:
         c = [FFMPEG, "-hide_banner", "-loglevel", "error"]
         if gpu:
             c += ["-hwaccel", "cuda"]
-            if gpu_gray_vf:
+            if gpu_smallfirst_vf:
                 c += ["-hwaccel_output_format", "cuda"]
-        vf_use = gpu_gray_vf if (gpu and gpu_gray_vf) else vf
+        vf_use = gpu_smallfirst_vf if (gpu and gpu_smallfirst_vf) else vf
         c += [
             "-ss", f"{start_s}", "-t", f"{duration_s}", "-i", str(input_path),
             "-vf", vf_use, "-f", "rawvideo", "-pix_fmt", pix_fmt, "-",
