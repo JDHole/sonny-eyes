@@ -257,7 +257,9 @@ def process_file(path: Path, *, args, cfg, hash_by_path: dict, file_paths: list[
     return {"id": id_, "plik": path.name, "status": "ok", "czas_calkowity_s": round(t_total, 3), "raport": str(report_path)}
 
 
-def main(argv=None) -> int:
+def main(argv=None, on_progress=None) -> int:
+    """on_progress(entry: dict) - opcjonalny callback po KAZDYM pliku (ok / pominieto / duplikat / blad);
+    entry = wpis logu + {"i": numer pliku od 1, "n": liczba plikow}. Uzywa go scripts/przemial.py do _postep.json."""
     args = parse_args(argv)
     cfg = load_config(
         REPO_ROOT / "config.toml",
@@ -276,12 +278,21 @@ def main(argv=None) -> int:
     log_path = project_cache / "_log.jsonl"
 
     any_failed = False
+    total = len(file_paths)
 
-    for path in file_paths:
+    def _log_i_postep(entry: dict, idx: int) -> None:
+        append_log(log_path, entry)
+        if on_progress:
+            try:
+                on_progress({**entry, "i": idx, "n": total})
+            except Exception as e:  # noqa: BLE001
+                print(f"on_progress: {e}", file=sys.stderr)
+
+    for idx, path in enumerate(file_paths, 1):
         if path in dup_map:
             original = dup_map[path]
             print(f"{path.name}: POMINIETO, identyczny hash_4mb jak {original.name} (duplikat)")
-            append_log(log_path, {
+            _log_i_postep({
                 "id": keys_mod.compute_id(original, unique_paths, production_root),
                 "plik": path.name,
                 "sciezka_rel": str(path).replace("\\", "/"),
@@ -291,22 +302,22 @@ def main(argv=None) -> int:
                 "czas_calkowity_s": None,
                 "data": datetime.datetime.now().astimezone().isoformat(),
                 "wersja_metryk": "0.2",
-            })
+            }, idx)
             continue
         try:
             result = process_file(path, args=args, cfg=cfg, hash_by_path=hash_by_path, file_paths=unique_paths)
-            append_log(log_path, {
+            _log_i_postep({
                 "id": result["id"],
                 "plik": result["plik"],
                 "status": result["status"],
                 "czas_calkowity_s": result["czas_calkowity_s"],
                 "data": datetime.datetime.now().astimezone().isoformat(),
                 "wersja_metryk": "0.2",
-            })
+            }, idx)
         except Exception as e:  # noqa: BLE001
             any_failed = True
             print(f"{path.name}: BLAD {e}", file=sys.stderr)
-            append_log(log_path, {
+            _log_i_postep({
                 "id": keys_mod.compute_id(path, unique_paths, production_root),
                 "plik": path.name,
                 "status": "blad",
@@ -314,7 +325,7 @@ def main(argv=None) -> int:
                 "error": str(e),
                 "data": datetime.datetime.now().astimezone().isoformat(),
                 "wersja_metryk": "0.2",
-            })
+            }, idx)
             continue
 
     return 1 if any_failed else 0
