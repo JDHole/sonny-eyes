@@ -26,9 +26,20 @@ from eyes.config import load_config  # noqa: E402
 MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 
 
-def data_uri(path: Path) -> str:
+def data_uri(path: Path, width: int | None = None, jpeg_q: int | None = None) -> str:
+    """Obraz jako data URI. Gdy podano width/jpeg_q (tryb kompaktowy), skaluje i zapisuje jako JPEG
+    (artefakt ma limit 16 MB, wiec przy setkach klipow pelne PNG sie nie mieszcza)."""
     if not path or not path.exists():
         return ""
+    if width or jpeg_q:
+        import io as _io
+        from PIL import Image
+        im = Image.open(path).convert("RGB")
+        if width and im.width > width:
+            im = im.resize((width, round(im.height * width / im.width)))
+        buf = _io.BytesIO()
+        im.save(buf, "JPEG", quality=jpeg_q or 78, optimize=True)
+        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
     b = path.read_bytes()
     return f"data:{MIME.get(path.suffix.lower(), 'application/octet-stream')};base64," + base64.b64encode(b).decode("ascii")
 
@@ -53,6 +64,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default=None)
     ap.add_argument("--vault", default=None)
     ap.add_argument("--cache-root", default=None)
+    ap.add_argument("--compact", action="store_true", help="male JPEG-i (cegla 320 px, przebieg 480 px, bez waveformu) pod limit artefaktu")
     args = ap.parse_args(argv)
 
     cfg = load_config(REPO_ROOT / "config.toml", overrides={"vault": args.vault, "cache_root": args.cache_root})
@@ -80,9 +92,14 @@ def main(argv=None) -> int:
         pr = probka.get(i, {})
         wk = werdykty.get(i)
         n_kuba += 1 if wk else 0
-        cegla = data_uri(project_cache / i / "frames" / f"{i}_najostrzejsza.png")
-        wave = data_uri(project_cache / i / "scopes" / f"{i}_waveform.png")
-        ruch_png = data_uri(project_cache / i / "scopes" / f"{i}_przebieg.png")
+        if args.compact:
+            cegla = data_uri(project_cache / i / "frames" / f"{i}_najostrzejsza.png", width=320, jpeg_q=75)
+            wave = ""
+            ruch_png = data_uri(project_cache / i / "scopes" / f"{i}_przebieg.png", width=480, jpeg_q=80)
+        else:
+            cegla = data_uri(project_cache / i / "frames" / f"{i}_najostrzejsza.png")
+            wave = data_uri(project_cache / i / "scopes" / f"{i}_waveform.png")
+            ruch_png = data_uri(project_cache / i / "scopes" / f"{i}_przebieg.png")
         klasa = "+".join(m.get("klasa", []) or [])
         jitter = m.get("jitter_rms_pct")
         wersja = str(r.get("wersja_metryk", ""))
