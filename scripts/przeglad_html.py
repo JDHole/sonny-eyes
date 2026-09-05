@@ -65,6 +65,7 @@ def main(argv=None) -> int:
     ap.add_argument("--vault", default=None)
     ap.add_argument("--cache-root", default=None)
     ap.add_argument("--compact", action="store_true", help="male JPEG-i (cegla 320 px, przebieg 480 px, bez waveformu) pod limit artefaktu")
+    ap.add_argument("--status", default=None, help="tekst 'Stan' na gorze strony (domyslnie: z pliku Color/_stan_przegladu.txt, jesli istnieje)")
     args = ap.parse_args(argv)
 
     cfg = load_config(REPO_ROOT / "config.toml", overrides={"vault": args.vault, "cache_root": args.cache_root})
@@ -156,6 +157,9 @@ def main(argv=None) -> int:
 </article>""")
 
     gen = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+    stan_plik = color_dir / "_stan_przegladu.txt"
+    status_txt = args.status or (stan_plik.read_text(encoding="utf-8").strip() if stan_plik.exists() else
+                                 "Progi flag są prowizoryczne (do kalibracji na werdyktach Kuby). Czerń i przepał wiarygodne; ruch v0.2 liczony z całego klipu.")
     wersje = sorted({str(r.get("wersja_metryk")) for r in reports})
     flag_filters = "".join(f'<label class="chk"><input type="checkbox" data-flag="{html.escape(f)}"> {html.escape(f)} <span class="cnt">{c}</span></label>' for f, c in sorted(flag_counts.items()))
 
@@ -235,8 +239,8 @@ details.legend dd{{margin:0;max-width:70ch}}
   </div>
 
   <div class="status">
-    <div class="eyebrow">Stan weekendu</div>
-    Blok 2 zamknięty: repo, venv, pomiar v0.1 na trzech klipach, bramki zielone. Blok 3 w toku: 13 klipów próbki kalibracyjnej zmierzonych, czekam na Twoje oko. Metryka ruchu v0.1 jest niewiarygodna (liczyła pierwsze 5 s klipu), v0.2 w robocie. Czerń i przepał są wiarygodne.
+    <div class="eyebrow">Stan</div>
+    {html.escape(status_txt)}
   </div>
 
   <details class="legend">
