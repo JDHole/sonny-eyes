@@ -1,0 +1,5 @@
+# Konfiguracja sonny-eyes. Sciezki domyslne srodowiska Kuby (laptop).
+vault = "C:/Users/jdziu/Mój dysk/JDHole_OS_2.0"
+production_root = "C:/Users/jdziu/JDHole Production"
+cache_root = "C:/Users/jdziu/JDHole Production/Cache/percepcja"
+lut_fuji = "C:/ProgramData/Blackmagic Design/DaVinci Resolve/Support/LUT/JDHole/FLog_to_Rec709_65pt.cube"
