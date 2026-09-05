@@ -34,7 +34,6 @@ from eyes import scopes as scopes_mod  # noqa: E402
 from eyes.config import load_config  # noqa: E402
 
 FPS_A = 2
-FPS_B = 10
 TARGET_WIDTH = 480
 DEFAULT_WINDOW_FULL_BELOW_S = 30.0
 
@@ -111,6 +110,10 @@ def process_file(path: Path, *, args, cfg, hash_by_path: dict, file_paths: list[
     koniec_s = start_s + win_len
     okno_krotsze = duration < requested_end
 
+    # Ruch (probka B) probkuje CALY klip od 0 s, niezaleznie od okna A powyzej
+    # - patrz plan_probkowania_ruchu (10/5 kl/s, twardy limit 180 s materialu).
+    fps_b, dlugosc_b, obciete_s = metrics_mod.plan_probkowania_ruchu(duration)
+
     t_start_total = time.perf_counter()
 
     dec_a = decode_mod.decode_frames(
@@ -118,10 +121,10 @@ def process_file(path: Path, *, args, cfg, hash_by_path: dict, file_paths: list[
         target_w=TARGET_WIDTH, lut_dir=lut_dir, lut_name=lut_name,
         grayscale=False, use_gpu=not args.no_gpu,
     )
-    b_len = min(5.0, win_len)
+    # bez LUT - ruch nie potrzebuje LUT (kolor/tonalnosc nie sa tu liczone).
     dec_b = decode_mod.decode_frames(
-        str(path), start_s, b_len, fps=FPS_B, orig_w=info["w"], orig_h=info["h"],
-        target_w=TARGET_WIDTH, lut_dir=lut_dir, lut_name=lut_name,
+        str(path), 0.0, dlugosc_b, fps=fps_b, orig_w=info["w"], orig_h=info["h"],
+        target_w=TARGET_WIDTH, lut_dir=None, lut_name=None,
         grayscale=True, use_gpu=not args.no_gpu,
     )
 
@@ -136,7 +139,8 @@ def process_file(path: Path, *, args, cfg, hash_by_path: dict, file_paths: list[
     kolor = metrics_mod.compute_kolor(frames_a)
     ostrosc, idx_sharp = metrics_mod.compute_ostrosc(frames_a)
     szum = metrics_mod.compute_szum(frames_a[idx_sharp])
-    ruch = metrics_mod.compute_ruch(frames_b, fps_b=FPS_B, target_width=dec_b["width"])
+    ruch = metrics_mod.compute_ruch(frames_b, fps_b=fps_b, target_width=dec_b["width"])
+    ruch["obcieto_s"] = obciete_s
     plynnosc = metrics_mod.compute_plynnosc(frames_b, info["fps"], info["fps_avg"])
     montaz = metrics_mod.compute_montaz(duration)
     flagi = metrics_mod.compute_flagi(tonalnosc, ostrosc, ruch)
@@ -185,7 +189,7 @@ def process_file(path: Path, *, args, cfg, hash_by_path: dict, file_paths: list[
     }
     okno = {
         "start_s": start_s, "koniec_s": koniec_s,
-        "fps_probki_a": FPS_A, "fps_probki_b": FPS_B, "szerokosc_px": TARGET_WIDTH,
+        "fps_probki_a": FPS_A, "fps_probki_b": fps_b, "szerokosc_px": TARGET_WIDTH,
         "liczba_klatek_a": int(frames_a.shape[0]), "liczba_klatek_b": int(frames_b.shape[0]),
     }
     niepewnosc = {
@@ -256,7 +260,7 @@ def main(argv=None) -> int:
                 "hash_4mb": hash_by_path[path],
                 "czas_calkowity_s": None,
                 "data": datetime.datetime.now().astimezone().isoformat(),
-                "wersja_metryk": "0.1",
+                "wersja_metryk": "0.2",
             })
             continue
         try:
@@ -267,7 +271,7 @@ def main(argv=None) -> int:
                 "status": result["status"],
                 "czas_calkowity_s": result["czas_calkowity_s"],
                 "data": datetime.datetime.now().astimezone().isoformat(),
-                "wersja_metryk": "0.1",
+                "wersja_metryk": "0.2",
             })
         except Exception as e:  # noqa: BLE001
             any_failed = True
@@ -279,7 +283,7 @@ def main(argv=None) -> int:
                 "czas_calkowity_s": None,
                 "error": str(e),
                 "data": datetime.datetime.now().astimezone().isoformat(),
-                "wersja_metryk": "0.1",
+                "wersja_metryk": "0.2",
             })
             continue
 

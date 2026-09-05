@@ -96,6 +96,89 @@ def main() -> int:
         else:
             check(zrodlo.get("lut_pomiarowy") is None, f"{id_}: lut_pomiarowy powinien byc null dla {case['kamera']}")
 
+        # --- ruch v0.2: sanity strukturalny nowych pol - TYLKO gdy raport
+        # faktycznie deklaruje wersja_metryk 0.2 (starsze raporty w tym samym
+        # folderze, jeszcze nie przeliczone, maja stary ksztalt ruch i to jest
+        # ok - regeneracja jest osobna decyzja, nie czescia tego smoke testu).
+        if data.get("wersja_metryk") == "0.2":
+            ruch = data.get("ruch", {})
+            check(ruch.get("zrodlo") == "lk_ransac_affine", f"{id_}: ruch.zrodlo={ruch.get('zrodlo')} oczekiwano lk_ransac_affine")
+            klasa = ruch.get("klasa")
+            check(isinstance(klasa, list) and len(klasa) > 0, f"{id_}: ruch.klasa={klasa} puste/nie-lista")
+            profil = ruch.get("profil")
+            check(isinstance(profil, list), f"{id_}: ruch.profil nie jest lista")
+            for p in profil or []:
+                check(isinstance(p.get("t_s"), int), f"{id_}: profil.t_s={p.get('t_s')} nie jest int")
+                for k in ("ruch_pct", "jitter_pct"):
+                    v = p.get(k)
+                    check(v is None or (isinstance(v, (int, float)) and v >= 0), f"{id_}: profil.{k}={v} poza zakresem (t_s={p.get('t_s')})")
+                conf = p.get("conf")
+                check(isinstance(conf, (int, float)) and 0.0 <= conf <= 1.0, f"{id_}: profil.conf={conf} poza 0..1 (t_s={p.get('t_s')})")
+            odcinki = ruch.get("odcinki")
+            check(isinstance(odcinki, list), f"{id_}: ruch.odcinki nie jest lista")
+            for o in odcinki or []:
+                check(o.get("typ") in ("stabilny", "ruch"), f"{id_}: odcinek typ={o.get('typ')} nieznany")
+                check(o.get("od_s") is not None and o.get("do_s") is not None and o["od_s"] <= o["do_s"], f"{id_}: odcinek {o} od_s>do_s")
+            srodek = ruch.get("srodek")
+            check(srodek is None or ("od_s" in srodek and "do_s" in srodek), f"{id_}: ruch.srodek={srodek} zly ksztalt")
+            brzegi = ruch.get("brzegi") or {}
+            check(isinstance(brzegi.get("poczatek_ruch"), bool) and isinstance(brzegi.get("koniec_ruch"), bool),
+                  f"{id_}: ruch.brzegi={brzegi} pola nie sa bool")
+            check(isinstance(ruch.get("pary_niepewne"), int) and ruch["pary_niepewne"] >= 0,
+                  f"{id_}: ruch.pary_niepewne={ruch.get('pary_niepewne')}")
+            mediana, p90 = ruch.get("mediana_jitter_pct"), ruch.get("p90_jitter_pct")
+            if mediana is not None and p90 is not None:
+                check(p90 >= mediana, f"{id_}: p90_jitter_pct {p90} < mediana_jitter_pct {mediana}")
+
+    # --- kalibracja ruchu v0.2: werdykty Kuby 2026-09-05 (patrz CLAUDE.md sesji) ---
+    # DSCF1414 - kamera na murku, niestabilny tylko poczatek (i pewnie koniec).
+    # DSCF3066 - hero Anagi, ogolnie bardziej shaky niz 1414 (porownanie median).
+    # DSCF2988 - statyw, klasa "static", jitter srodka < 0.05.
+    ruch_cases = {}
+    for ruch_id in ("DSCF1414", "DSCF3066", "DSCF2988"):
+        rp = report_dir / f"{ruch_id}.json"
+        if not rp.exists():
+            check(False, f"kalibracja ruchu: brak raportu {ruch_id} (odpal measure.py --force na tym klipie)")
+            continue
+        ruch_cases[ruch_id] = json.loads(rp.read_text(encoding="utf-8")).get("ruch", {})
+
+    if len(ruch_cases) == 3:
+        r1414, r3066, r2988 = ruch_cases["DSCF1414"], ruch_cases["DSCF3066"], ruch_cases["DSCF2988"]
+
+        klasa_1414 = r1414.get("klasa") or []
+        check(
+            "postawiona" in klasa_1414 or "static" in klasa_1414,
+            f"DSCF1414: klasa={klasa_1414}, oczekiwano 'postawiona' albo 'static' (kamera na murku)",
+        )
+        srodek_1414 = r1414.get("srodek")
+        n_sec_1414 = len(r1414.get("profil") or []) or 1
+        check(srodek_1414 is not None, "DSCF1414: brak wykrytego stabilnego srodka")
+        if srodek_1414 is not None:
+            dl_1414 = srodek_1414["do_s"] - srodek_1414["od_s"] + 1
+            check(
+                dl_1414 >= 0.5 * n_sec_1414,
+                f"DSCF1414: srodek {srodek_1414} to {dl_1414}/{n_sec_1414} s, oczekiwano wiekszosci klipu",
+            )
+        check(
+            (r1414.get("brzegi") or {}).get("poczatek_ruch") is True,
+            f"DSCF1414: brzegi.poczatek_ruch={(r1414.get('brzegi') or {}).get('poczatek_ruch')}, oczekiwano true",
+        )
+
+        med_3066 = r3066.get("mediana_jitter_srodka_pct")
+        med_1414 = r1414.get("mediana_jitter_srodka_pct")
+        check(
+            med_3066 is not None and med_1414 is not None and med_3066 > med_1414,
+            f"DSCF3066 vs DSCF1414: mediana_jitter_srodka_pct {med_3066} nie jest > {med_1414} (Kuba: 3066 bardziej shaky)",
+        )
+
+        klasa_2988 = r2988.get("klasa") or []
+        check("static" in klasa_2988, f"DSCF2988: klasa={klasa_2988}, oczekiwano 'static' (statyw)")
+        jitter_2988 = r2988.get("jitter_rms_pct")
+        check(
+            jitter_2988 is not None and jitter_2988 < 0.05,
+            f"DSCF2988: jitter_rms_pct={jitter_2988}, oczekiwano < 0.05 (statyw)",
+        )
+
     if failures:
         print(f"SMOKE TEST: FAIL ({len(failures)} problemow)")
         for f in failures:

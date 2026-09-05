@@ -22,7 +22,7 @@ def build_report(
     szum, ruch, plynnosc, montaz, klatki, skopy, flagi, progi, niepewnosc, pomiar,
 ) -> dict:
     report = {
-        "wersja_metryk": "0.1",
+        "wersja_metryk": "0.2",
         "id": id_,
         "projekt": projekt,
         "zrodlo": zrodlo,
