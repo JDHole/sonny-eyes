@@ -121,14 +121,19 @@ def qualified(project: str, id_: str) -> str:
 
 
 def _common_root(paths: list[Path]) -> Path:
-    parts = [p.resolve().parts for p in paths]
+    """Wspolny KATALOG-przodek listy plikow (parts liczone od .parent, nie od
+    pelnej sciezki z nazwa pliku) - dla listy z JEDNYM plikiem full-path.parts
+    dawaloby caly plik jako "root" (bo nie ma z czym porownac), a wtedy
+    sciezka wzgledna do niego samego to "." i cale id wychodzi puste; z
+    .parent.parts jednoelementowa lista od razu daje katalog nadrzedny."""
+    parts = [p.resolve().parent.parts for p in paths]
     common = parts[0]
     for q in parts[1:]:
         n = 0
         while n < min(len(common), len(q)) and common[n].lower() == q[n].lower():
             n += 1
         common = common[:n]
-    return Path(*common) if common else Path(paths[0].anchor)
+    return Path(*common) if common else Path(paths[0].resolve().anchor)
 
 
 def _rel(p: Path, base: Path) -> str:

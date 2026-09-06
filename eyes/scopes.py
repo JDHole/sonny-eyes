@@ -47,9 +47,14 @@ def render_scope(
     cwd = lut_dir if lut_name else None
 
     def build(width: int) -> str:
-        parts = []
+        # format=rgb24 zawsze na wejsciu (nie tylko gdy jest LUT) - bez tego
+        # klatka zostaje w natywnym formacie dekodera (np. 10-bit
+        # yuv422p10le F-Log Fuji), a waveform go nie akceptuje wprost (patrz
+        # README "vectorscope a waveform" - to samo dotyczy w praktyce
+        # waveform na materiale bez LUT, ujawnione dopiero pomiarem bez
+        # skonfigurowanego LUT-a).
+        parts = ["format=rgb24"]
         if lut_name:
-            parts.append("format=rgb24")
             parts.append(f"lut3d=file={lut_name}")
         parts.append(f"scale={width}:-2")
         if filter_name == "vectorscope":

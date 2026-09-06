@@ -46,7 +46,7 @@ def check(cond: bool, msg: str) -> None:
 
 def main() -> int:
     cfg = load_config(REPO_ROOT / "config.toml")
-    report_dir = Path(cfg.vault) / "40_Pracownie" / "Analog Studio" / "Projekty" / PROJECT / "Color" / "reports"
+    report_dir = cfg.reports_dir(PROJECT)
     cache_root = Path(cfg.cache_root)
 
     for case in CASES:

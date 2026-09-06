@@ -106,3 +106,17 @@ def load_config(config_path: Path | str | None = None, overrides: dict | None = 
         )
 
     return Config(out_root=str(out_root), cache_root=str(cache_root), reports_root=str(reports_root), lut=dict(lut))
+
+
+def overrides_from_out(out: str | None) -> dict:
+    """Buduje overrides dla load_config() z opcji CLI wspolnej `--out`
+    (i przestarzalego `--cache-root`, ktory jest jej aliasem). `--out`
+    przebija KAZDE zrodlo (config.toml, env) na wszystkich trzech polach -
+    w tym reports_root, nawet jesli config.toml ustawia go jawnie (np. na
+    folder w vaultcie Kuby) - inaczej `--out` do katalogu tymczasowego
+    nadal pisalby raporty w miejscu z configu, co jest dokladnie tym, czego
+    `--out` ma unikac (patrz tests/test_smoke.py i README)."""
+    if not out:
+        return {}
+    out = str(out)
+    return {"out_root": out, "cache_root": out, "reports_root": f"{out}/{{project}}/reports"}
