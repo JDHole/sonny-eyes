@@ -72,6 +72,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--out", default=None)
     ap.add_argument("--config", default=None)
     ap.add_argument("--lut", default=None)
+    ap.add_argument("--lang", choices=["pl", "en"], default=None, help="jezyk wykresu przebiegu; domyslnie z configu/env, inaczej en")
     ap.add_argument("--cache-root", default=None, help=argparse.SUPPRESS)  # przestarzale: alias --out
     return ap.parse_args(argv)
 
@@ -137,6 +138,8 @@ def main(argv=None) -> int:
         argv2 += ["--config", a.config]
     if a.lut:
         argv2 += ["--lut", a.lut]
+    if a.lang:
+        argv2 += ["--lang", a.lang]
     try:
         rc = measure.main(argv2, on_progress=on_progress)
     except KeyboardInterrupt:

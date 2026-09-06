@@ -69,6 +69,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--window-start", type=float, default=5.0)
     ap.add_argument("--window-len", type=float, default=20.0)
+    ap.add_argument("--lang", choices=["pl", "en"], default=None, help="jezyk wykresu przebiegu; domyslnie z configu/env, inaczej en")
     ap.add_argument("--cache-root", default=None, help=argparse.SUPPRESS)  # przestarzale: alias --out
     return ap.parse_args(argv)
 
@@ -252,7 +253,7 @@ def process_file(path: Path, *, args, cfg, hash_by_path: dict, file_paths: list[
     )
 
     przebieg_path = scopes_dir / f"{id_}_przebieg.png"
-    if przebieg_mod.render_przebieg(report, przebieg_path) is not None:
+    if przebieg_mod.render_przebieg(report, przebieg_path, lang=cfg.lang) is not None:
         report["skopy"].append({"typ": "przebieg", "t_s": None, "plik": rel_to(przebieg_path, cache_root)})
 
     report_mod.write_report(report, report_path)
@@ -270,6 +271,8 @@ def main(argv=None, on_progress=None) -> int:
     entry = wpis logu + {"i": numer pliku od 1, "n": liczba plikow}. Uzywa go eyes.cmd_batch do _postep.json."""
     args = parse_args(argv)
     overrides = overrides_from_out(args.out or args.cache_root)
+    if args.lang:
+        overrides["lang"] = args.lang
     cfg = load_config(args.config, overrides=overrides)
     cache_root = Path(cfg.cache_root)
     file_paths = [Path(f).resolve() if Path(f).exists() else Path(f) for f in args.files]

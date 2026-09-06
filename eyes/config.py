@@ -1,9 +1,10 @@
 """Wczytanie config.toml (opcjonalny) + nadpisania z CLI/env.
 
 Kolejnosc nadpisan (pierwsze wygrywa): CLI (`overrides`) > zmienne
-srodowiskowe (`EYES_OUT`, `EYES_CONFIG`) > config.toml obok repo (jesli
-istnieje) > domyslne. Brak config.toml NIE jest bledem - narzedzie dziala
-od razu z samymi domyslnymi (`out_root = "./eyes-out"` wzgledem cwd).
+srodowiskowe (`EYES_OUT`, `EYES_CONFIG`, `EYES_LANG`) > config.toml obok
+repo (jesli istnieje) > domyslne. Brak config.toml NIE jest bledem -
+narzedzie dziala od razu z samymi domyslnymi (`out_root = "./eyes-out"`
+wzgledem cwd, `lang = "en"`).
 
 Stare klucze sprzed publicznej wersji (`vault`, `production_root`,
 `lut_fuji`) daja czytelny ConfigError z instrukcja migracji zamiast
@@ -20,6 +21,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULT_OUT_ROOT = "./eyes-out"
 OLD_KEYS = ("vault", "production_root", "lut_fuji")
+VALID_LANGS = ("pl", "en")
+DEFAULT_LANG = "en"
 
 MIGRATION_MSG = (
     "config.toml uzywa nieaktualnych kluczy sprzed wersji publicznej: {keys}. "
@@ -40,6 +43,7 @@ class Config:
     cache_root: str
     reports_root: str  # szablon ze znacznikiem {project}
     lut: dict[str, str] = field(default_factory=dict)  # kamera -> sciezka .cube
+    lang: str = DEFAULT_LANG  # jezyk interfejsu strony przegladu/wykresu przebiegu: "pl" albo "en"
 
     def reports_dir(self, project: str) -> Path:
         """Katalog raportow danego projektu (formatuje szablon reports_root)."""
@@ -67,9 +71,9 @@ def load_config(config_path: Path | str | None = None, overrides: dict | None = 
         None -> szuka w EYES_CONFIG (zmienna srodowiskowa), inaczej
         config.toml obok repo. W kazdym przypadku brak pliku pod finalna
         sciezka NIE jest bledem - po prostu brak danych z pliku.
-    overrides: dict z kluczami out_root/cache_root/reports_root - wartosci
-        None sa ignorowane (nie nadpisuja). To jest warstwa CLI (najwyzszy
-        priorytet).
+    overrides: dict z kluczami out_root/cache_root/reports_root/lang -
+        wartosci None sa ignorowane (nie nadpisuja). To jest warstwa CLI
+        (najwyzszy priorytet).
     """
     overrides = overrides or {}
 
@@ -105,7 +109,23 @@ def load_config(config_path: Path | str | None = None, overrides: dict | None = 
             "(klucz jak w polu zrodlo.kamera raportu, np. 'fuji')."
         )
 
-    return Config(out_root=str(out_root), cache_root=str(cache_root), reports_root=str(reports_root), lut=dict(lut))
+    lang = (
+        overrides.get("lang")
+        or os.environ.get("EYES_LANG")
+        or data.get("lang")
+        or DEFAULT_LANG
+    )
+    if lang not in VALID_LANGS:
+        raise ConfigError(
+            f"lang musi byc 'pl' albo 'en' (dostales: {lang!r}). Kolejnosc "
+            f"nadpisan: --lang w CLI > EYES_LANG (env) > lang w config.toml > "
+            f"domyslnie 'en'."
+        )
+
+    return Config(
+        out_root=str(out_root), cache_root=str(cache_root), reports_root=str(reports_root),
+        lut=dict(lut), lang=str(lang),
+    )
 
 
 def overrides_from_out(out: str | None) -> dict:

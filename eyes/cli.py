@@ -59,7 +59,8 @@ def cli() -> None:
 @click.option("--force", is_flag=True, default=False, help="Re-measure even if a report already exists.")
 @click.option("--window-start", type=float, default=5.0, show_default=True, help="Measurement window start (seconds).")
 @click.option("--window-len", type=float, default=20.0, show_default=True, help="Measurement window length (seconds).")
-def measure(project, files_, extra_paths, out, config_path, lut, no_gpu, force, window_start, window_len) -> None:
+@click.option("--lang", type=click.Choice(["pl", "en"]), default=None, help="Language for the clip profile chart drawn during measurement. Default: from config/env, else en.")
+def measure(project, files_, extra_paths, out, config_path, lut, no_gpu, force, window_start, window_len, lang) -> None:
     """Measure one or more clips and write a perception report per clip."""
     files_ = tuple(files_) + tuple(extra_paths)
     argv = ["--project", project, "--files", *files_]
@@ -67,6 +68,8 @@ def measure(project, files_, extra_paths, out, config_path, lut, no_gpu, force, 
     if force:
         argv.append("--force")
     argv += ["--window-start", str(window_start), "--window-len", str(window_len)]
+    if lang:
+        argv += ["--lang", lang]
     sys.exit(cmd_measure.main(argv))
 
 
@@ -85,8 +88,9 @@ def measure(project, files_, extra_paths, out, config_path, lut, no_gpu, force, 
 @click.option("--out", default=None, help="Output root override.")
 @click.option("--config", "config_path", default=None, help="Explicit path to config.toml.")
 @click.option("--lut", default=None, help="Force this LUT on every clip, regardless of camera.")
+@click.option("--lang", type=click.Choice(["pl", "en"]), default=None, help="Language for the clip profile chart drawn during measurement. Default: from config/env, else en.")
 @click.option("--detach", is_flag=True, default=False, help="Run as a detached background process; prints {pid,...} JSON and returns immediately.")
-def batch(project, folder, extra_folders, porcja, force, no_gpu, limit, out, config_path, lut, detach) -> None:
+def batch(project, folder, extra_folders, porcja, force, no_gpu, limit, out, config_path, lut, lang, detach) -> None:
     """Scan folder(s) recursively and measure every camera clip found."""
     folder = tuple(folder) + tuple(extra_folders)
     # JEDNA flaga --folder z wszystkimi sciezkami: cmd_batch ma argparse nargs="+",
@@ -100,6 +104,8 @@ def batch(project, folder, extra_folders, porcja, force, no_gpu, limit, out, con
     if limit is not None:
         argv += ["--limit", str(limit)]
     argv += _out_config_lut_argv(out, config_path, lut, no_gpu)
+    if lang:
+        argv += ["--lang", lang]
 
     if not detach:
         sys.exit(cmd_batch.main(argv))
@@ -120,7 +126,8 @@ def batch(project, folder, extra_folders, porcja, force, no_gpu, limit, out, con
 @click.option("--config", "config_path", default=None, help="Explicit path to config.toml.")
 @click.option("--compact", is_flag=True, default=False, help="Small JPEGs (fits artifact size limits) instead of full PNGs.")
 @click.option("--status", "status_text", default=None, help="Status banner text at the top of the page.")
-def review(project, out_file, out, config_path, compact, status_text) -> None:
+@click.option("--lang", type=click.Choice(["pl", "en"]), default=None, help="Page language. Default: from config/env, else en.")
+def review(project, out_file, out, config_path, compact, status_text, lang) -> None:
     """Build the HTML review page (bricks, numbers, flags) for a project."""
     argv = ["--project", project]
     if out_file:
@@ -133,6 +140,8 @@ def review(project, out_file, out, config_path, compact, status_text) -> None:
         argv.append("--compact")
     if status_text:
         argv += ["--status", status_text]
+    if lang:
+        argv += ["--lang", lang]
     sys.exit(cmd_review.main(argv))
 
 
@@ -148,7 +157,8 @@ def review(project, out_file, out, config_path, compact, status_text) -> None:
 @click.argument("extra_ids", nargs=-1, type=click.UNPROCESSED, metavar="[ID...]")
 @click.option("--out", default=None, help="Output root override.")
 @click.option("--config", "config_path", default=None, help="Explicit path to config.toml.")
-def profile(project, ids, extra_ids, out, config_path) -> None:
+@click.option("--lang", type=click.Choice(["pl", "en"]), default=None, help="Chart language. Default: from config/env, else en.")
+def profile(project, ids, extra_ids, out, config_path, lang) -> None:
     """Redraw the 'clip profile' PNG from an existing report, without re-measuring."""
     ids = tuple(ids) + tuple(extra_ids)
     argv = ["--project", project]
@@ -158,6 +168,8 @@ def profile(project, ids, extra_ids, out, config_path) -> None:
         argv += ["--out", out]
     if config_path:
         argv += ["--config", config_path]
+    if lang:
+        argv += ["--lang", lang]
     sys.exit(cmd_profile.main(argv))
 
 

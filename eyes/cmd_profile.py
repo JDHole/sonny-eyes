@@ -38,6 +38,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--ids", nargs="+", default=None)
     ap.add_argument("--out", default=None)
     ap.add_argument("--config", default=None)
+    ap.add_argument("--lang", choices=["pl", "en"], default=None, help="jezyk wykresu przebiegu; domyslnie z configu/env, inaczej en")
     ap.add_argument("--cache-root", default=None, help=argparse.SUPPRESS)  # przestarzale: alias --out
     return ap.parse_args(argv)
 
@@ -49,6 +50,8 @@ def rel_to(path: Path, root: Path) -> str:
 def main(argv=None) -> int:
     args = parse_args(argv)
     overrides = overrides_from_out(args.out or args.cache_root)
+    if args.lang:
+        overrides["lang"] = args.lang
     cfg = load_config(args.config, overrides=overrides)
     cache_root = Path(cfg.cache_root)
     report_dir = cfg.reports_dir(args.project)
@@ -76,7 +79,7 @@ def main(argv=None) -> int:
             continue
 
         out_path = cache_root / args.project / id_ / "scopes" / f"{id_}_przebieg.png"
-        wynik = przebieg_mod.render_przebieg(report, out_path)
+        wynik = przebieg_mod.render_przebieg(report, out_path, lang=cfg.lang)
 
         if wynik is None:
             print(f"{id_}: brak profilu, zmierz z --force")

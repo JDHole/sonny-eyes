@@ -23,6 +23,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 from eyes.config import load_config, overrides_from_out  # noqa: E402
+from eyes.i18n import FLAG_GLOSS_EN, t as tr  # noqa: E402
 
 MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 
@@ -67,6 +68,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--config", default=None)
     ap.add_argument("--compact", action="store_true", help="male JPEG-i (cegla 320 px, przebieg 480 px, bez waveformu) pod limit artefaktu")
     ap.add_argument("--status", default=None, help="tekst 'Stan' na gorze strony (domyslnie: z pliku Color/_stan_przegladu.txt, jesli istnieje)")
+    ap.add_argument("--lang", choices=["pl", "en"], default=None, help="jezyk strony (pl|en); domyslnie z configu/env, inaczej en")
     ap.add_argument("--cache-root", default=None, help=argparse.SUPPRESS)  # przestarzale: alias --out
     return ap.parse_args(argv)
 
@@ -75,7 +77,10 @@ def main(argv=None) -> int:
     args = parse_args(argv)
 
     overrides = overrides_from_out(args.out or args.cache_root)
+    if args.lang:
+        overrides["lang"] = args.lang
     cfg = load_config(args.config, overrides=overrides)
+    lang = cfg.lang
     cache_root = Path(cfg.cache_root)
     reports_dir = cfg.reports_dir(args.project)
     color_dir = cfg.color_dir(args.project)
@@ -112,37 +117,46 @@ def main(argv=None) -> int:
         jitter = m.get("jitter_rms_pct")
         wersja = str(r.get("wersja_metryk", ""))
         if m.get("mediana_jitter_srodka_pct") is not None:
-            jitter_txt = f"drganie środka (mediana) {fmt(m.get('mediana_jitter_srodka_pct'), 2, '%')}"
+            jitter_txt = f"{tr(lang, 'jitter_center')} {fmt(m.get('mediana_jitter_srodka_pct'), 2, '%')}"
             jitter_sort = m.get("mediana_jitter_srodka_pct") or 0
         else:
-            jitter_txt = f"jitter {fmt(jitter, 2, '%')}"
+            jitter_txt = f"{tr(lang, 'jitter_word')} {fmt(jitter, 2, '%')}"
             jitter_sort = jitter or 0
-        ver_html = f'<span class="vwarn">v{html.escape(wersja)} niewiarygodne</span>' if wersja == "0.1" else f'<span class="vok">v{html.escape(wersja)}</span>'
+        ver_html = (f'<span class="vwarn">v{html.escape(wersja)} {tr(lang, "unreliable")}</span>' if wersja == "0.1"
+                    else f'<span class="vok">v{html.escape(wersja)}</span>')
         nazwa = pr.get("nazwa") or i
-        flags_html = "".join(f'<span class="chip chip-{"bad" if f.startswith("clip_hi") or f == "trzesie" else "warn"}">{html.escape(f)}</span>' for f in flags) or '<span class="chip chip-ok">bez flag</span>'
+
+        def _flag_title(f: str) -> str:
+            gloss = FLAG_GLOSS_EN.get(f) if lang == "en" else None
+            return f' title="{html.escape(gloss)}"' if gloss else ""
+
+        flags_html = "".join(
+            f'<span class="chip chip-{"bad" if f.startswith("clip_hi") or f == "trzesie" else "warn"}"{_flag_title(f)}>{html.escape(f)}</span>'
+            for f in flags
+        ) or f'<span class="chip chip-ok">{tr(lang, "no_flags")}</span>'
         kuba_html = ""
         if wk:
             et = ", ".join(f"{a}: {b}" for a, b in (wk.get("etykiety") or {}).items())
-            kuba_html = (f'<div class="verdict verdict-fresh"><div class="v-label">Werdykt Kuby &middot; {html.escape(wk.get("data", ""))}</div>'
+            kuba_html = (f'<div class="verdict verdict-fresh"><div class="v-label">{tr(lang, "verdict_label")} &middot; {html.escape(wk.get("data", ""))}</div>'
                          f'<blockquote>{html.escape(wk.get("cytat", ""))}</blockquote>'
                          f'<div class="v-meta">{html.escape(et)}</div></div>')
         hist_html = ""
         if pr.get("werdykt"):
-            hist_html = (f'<div class="verdict verdict-hist"><div class="v-label">Z logów &middot; {html.escape(pr.get("czyj", ""))} &middot; {html.escape(pr.get("o_czym", ""))}</div>'
+            hist_html = (f'<div class="verdict verdict-hist"><div class="v-label">{tr(lang, "hist_label")} &middot; {html.escape(pr.get("czyj", ""))} &middot; {html.escape(pr.get("o_czym", ""))}</div>'
                          f'<blockquote>{html.escape(pr["werdykt"])}</blockquote>'
                          f'<div class="v-meta">{html.escape(pr.get("zrodlo", ""))}</div></div>')
         note_html = f'<div class="note"><span class="v-label">Sonny:</span> {html.escape(pr["zgodnosc_v01"])}</div>' if pr.get("zgodnosc_v01") else ""
         srodek = m.get("srodek")
-        srodek_txt = f' &middot; środek {srodek["od_s"]}-{srodek["do_s"]} s' if isinstance(srodek, dict) and srodek else ""
-        imgs = [("cegla", cegla, "cegła"), ("wave", wave, "waveform")]
+        srodek_txt = f' &middot; {tr(lang, "center_word")} {srodek["od_s"]}-{srodek["do_s"]} s' if isinstance(srodek, dict) and srodek else ""
+        imgs = [("cegla", cegla, tr(lang, "img_thumb")), ("wave", wave, tr(lang, "img_wave"))]
         if ruch_png:
-            imgs.append(("ruch", ruch_png, "przebieg"))
+            imgs.append(("ruch", ruch_png, tr(lang, "img_profile")))
         img_btns = "".join(f'<button type="button" class="imgbtn{" active" if n == 0 else ""}" data-img="{key}">{lab}</button>' for n, (key, _, lab) in enumerate(imgs) if _)
         img_data = " ".join(f'data-{key}="{uri}"' for key, uri, _ in imgs if uri and key != "cegla")  # cegla jest juz w src
         cards.append(f"""
-<article class="card" data-id="{html.escape(i)}" data-cam="{html.escape(cam)}" data-p5="{t.get('p5', 0)}" data-cliphi="{t.get('clip_hi_pct', 0)}" data-lapvar="{o.get('lapvar', 0)}" data-jitter="{jitter or 0}" data-flags="{html.escape(' '.join(flags))}" data-kuba="{1 if wk else 0}">
+<article class="card" data-id="{html.escape(i)}" data-cam="{html.escape(cam)}" data-p5="{t.get('p5', 0)}" data-cliphi="{t.get('clip_hi_pct', 0)}" data-lapvar="{o.get('lapvar', 0)}" data-jitter="{jitter or 0}" data-flags="{html.escape(' '.join(flags))}" data-verdict="{1 if wk else 0}">
   <div class="thumb" {img_data}>
-    <img src="{cegla}" alt="najostrzejsza klatka {html.escape(i)}" loading="lazy">
+    <img src="{cegla}" alt="{tr(lang, 'thumb_alt')} {html.escape(i)}" loading="lazy">
     <div class="imgbar">{img_btns}</div>
   </div>
   <header class="slate">
@@ -151,13 +165,13 @@ def main(argv=None) -> int:
     <div class="slate-cam cam-{html.escape(cam.lower())}">{html.escape(cam)} &middot; {html.escape(str(z.get('profil') or '-'))} &middot; {fmt(z.get('czas_s'), 1, ' s')}</div>
   </header>
   <dl class="nums">
-    <div><dt>czerń p5</dt><dd>{fmt(t.get('p5'))}</dd></div>
-    <div><dt>środek p50</dt><dd>{fmt(t.get('p50'))}</dd></div>
-    <div><dt>światła p99</dt><dd>{fmt(t.get('p99'))}</dd></div>
-    <div><dt>przepał</dt><dd>{fmt(t.get('clip_hi_pct'), 2, '%')}</dd></div>
-    <div><dt>ostrość</dt><dd>{fmt(o.get('lapvar'), 0)}</dd></div>
-    <div><dt>nasycenie</dt><dd>{fmt(k.get('sat_mean'))}</dd></div>
-    <div class="wide"><dt>ruch {ver_html}</dt><dd>{html.escape(klasa or '-')} &middot; {jitter_txt}{srodek_txt}</dd></div>
+    <div><dt>{tr(lang, 'label_p5')}</dt><dd>{fmt(t.get('p5'))}</dd></div>
+    <div><dt>{tr(lang, 'label_p50')}</dt><dd>{fmt(t.get('p50'))}</dd></div>
+    <div><dt>{tr(lang, 'label_p99')}</dt><dd>{fmt(t.get('p99'))}</dd></div>
+    <div><dt>{tr(lang, 'label_przepal')}</dt><dd>{fmt(t.get('clip_hi_pct'), 2, '%')}</dd></div>
+    <div><dt>{tr(lang, 'label_ostrosc')}</dt><dd>{fmt(o.get('lapvar'), 0)}</dd></div>
+    <div><dt>{tr(lang, 'label_nasycenie')}</dt><dd>{fmt(k.get('sat_mean'))}</dd></div>
+    <div class="wide"><dt>{tr(lang, 'label_ruch')} {ver_html}</dt><dd>{html.escape(klasa or '-')} &middot; {jitter_txt}{srodek_txt}</dd></div>
   </dl>
   <div class="flags">{flags_html}</div>
   {kuba_html}{hist_html}{note_html}
@@ -166,11 +180,19 @@ def main(argv=None) -> int:
     gen = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
     stan_plik = color_dir / "_stan_przegladu.txt"
     status_txt = args.status or (stan_plik.read_text(encoding="utf-8").strip() if stan_plik.exists() else
-                                 "Progi flag są prowizoryczne (do kalibracji na werdyktach Kuby). Czerń i przepał wiarygodne; ruch v0.2 liczony z całego klipu.")
+                                 tr(lang, "status_default"))
     wersje = sorted({str(r.get("wersja_metryk")) for r in reports})
-    flag_filters = "".join(f'<label class="chk"><input type="checkbox" data-flag="{html.escape(f)}"> {html.escape(f)} <span class="cnt">{c}</span></label>' for f, c in sorted(flag_counts.items()))
 
-    page = f"""<title>Oczy Sonny'ego</title>
+    def _flag_filter_title(f: str) -> str:
+        gloss = FLAG_GLOSS_EN.get(f) if lang == "en" else None
+        return f' title="{html.escape(gloss)}"' if gloss else ""
+
+    flag_filters = "".join(
+        f'<label class="chk"{_flag_filter_title(f)}><input type="checkbox" data-flag="{html.escape(f)}"> {html.escape(f)} <span class="cnt">{c}</span></label>'
+        for f, c in sorted(flag_counts.items())
+    )
+
+    page = f"""<title>{tr(lang, 'app_title')}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 :root{{--bg:#141618;--surface:#1d2023;--surface2:#24282c;--line:#31363b;--ink:#e8e6df;--muted:#9a9c94;--accent:#c58048;--accent-ink:#141618;--ok:#6fb37a;--warn:#d9b24a;--bad:#d9605a;--wave:#9fd39f;--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 8px 24px rgba(0,0,0,.35);color-scheme:dark}}
@@ -233,64 +255,64 @@ details.legend dd{{margin:0;max-width:70ch}}
 <div class="wrap">
   <div class="top">
     <div>
-      <div class="eyebrow">Percepcja materiału &middot; {html.escape(args.project)} &middot; metryki v{html.escape("/".join(wersje))}</div>
-      <h1>Oczy Sonny'ego</h1>
+      <div class="eyebrow">{tr(lang, 'eyebrow_perception')} &middot; {html.escape(args.project)} &middot; {tr(lang, 'eyebrow_metrics')} v{html.escape("/".join(wersje))}</div>
+      <h1>{tr(lang, 'app_title')}</h1>
     </div>
     <div class="stats">
-      <div><b>{len(reports)}</b>klipów zmierzonych</div>
+      <div><b>{len(reports)}</b>{tr(lang, 'stat_measured')}</div>
       <div><b>{n_fuji}</b>Fuji</div>
       <div><b>{n_gopro}</b>GoPro</div>
-      <div><b>{n_kuba}</b>ze świeżym werdyktem Kuby</div>
-      <div><b>{gen}</b>wygenerowano</div>
+      <div><b>{n_kuba}</b>{tr(lang, 'stat_verdict')}</div>
+      <div><b>{gen}</b>{tr(lang, 'stat_generated')}</div>
     </div>
   </div>
 
   <div class="status">
-    <div class="eyebrow">Stan</div>
+    <div class="eyebrow">{tr(lang, 'status_label')}</div>
     {html.escape(status_txt)}
   </div>
 
   <details class="legend">
-    <summary>Jak czytać liczby</summary>
+    <summary>{tr(lang, 'legend_summary')}</summary>
     <dl>
-      <dt>czerń p5</dt><dd>Jasność (0 czarne, 1 białe), poniżej której leży 5% najciemniejszych pikseli. Robocze progi z lipca: 0.02 do 0.04 osadzona, powyżej 0.06 mleczna. Scena jasna z natury (high-key) nie ma czerni i to nie jest błąd.</dd>
-      <dt>środek p50</dt><dd>Mediana jasności kadru.</dd>
-      <dt>światła p99</dt><dd>Jasność, powyżej której leży 1% najjaśniejszych pikseli.</dd>
-      <dt>przepał</dt><dd>Procent pikseli wypalonych do białego. Roboczy próg: powyżej 1% flaga.</dd>
-      <dt>ostrość</dt><dd>Ile drobnych krawędzi i faktury w klatce. Zależy od treści: gąszcz liści da tysiące, mgła i gładkie niebo kilkaset, choć są ostre. Dobra do porównań w jednej scenie.</dd>
-      <dt>nasycenie</dt><dd>Średnie nasycenie koloru po LUT (0 szare, 1 maksymalne).</dd>
-      <dt>ruch</dt><dd>Klasa (statyw / ręka / trzęsie, plus pan) i jitter: o ile kadr drga z klatki na klatkę w procentach szerokości. W v0.1 liczone tylko z pierwszych 5 s klipu, więc traktuj jako podpowiedź. v0.2 liczy cały klip i pokazuje odcinki stabilne.</dd>
+      <dt>{tr(lang, 'label_p5')}</dt><dd>{tr(lang, 'desc_p5')}</dd>
+      <dt>{tr(lang, 'label_p50')}</dt><dd>{tr(lang, 'desc_p50')}</dd>
+      <dt>{tr(lang, 'label_p99')}</dt><dd>{tr(lang, 'desc_p99')}</dd>
+      <dt>{tr(lang, 'label_przepal')}</dt><dd>{tr(lang, 'desc_przepal')}</dd>
+      <dt>{tr(lang, 'label_ostrosc')}</dt><dd>{tr(lang, 'desc_ostrosc')}</dd>
+      <dt>{tr(lang, 'label_nasycenie')}</dt><dd>{tr(lang, 'desc_nasycenie')}</dd>
+      <dt>{tr(lang, 'label_ruch')}</dt><dd>{tr(lang, 'desc_ruch')}</dd>
     </dl>
   </details>
 
   <div class="controls">
-    <label>Sortuj <select id="sort">
-      <option value="id">po numerze</option>
-      <option value="p5-asc">czerń p5 rosnąco</option>
-      <option value="p5-desc">czerń p5 malejąco</option>
-      <option value="cliphi-desc">przepał malejąco</option>
-      <option value="lapvar-desc">ostrość malejąco</option>
-      <option value="jitter-desc">jitter malejąco</option>
+    <label>{tr(lang, 'sort_label')} <select id="sort">
+      <option value="id">{tr(lang, 'sort_id')}</option>
+      <option value="p5-asc">{tr(lang, 'sort_p5_asc')}</option>
+      <option value="p5-desc">{tr(lang, 'sort_p5_desc')}</option>
+      <option value="cliphi-desc">{tr(lang, 'sort_cliphi_desc')}</option>
+      <option value="lapvar-desc">{tr(lang, 'sort_lapvar_desc')}</option>
+      <option value="jitter-desc">{tr(lang, 'sort_jitter_desc')}</option>
     </select></label>
-    <label>Kamera <select id="cam"><option value="">wszystkie</option><option>Fuji</option><option>GoPro</option></select></label>
-    <label class="chk"><input type="checkbox" id="onlykuba"> tylko z werdyktem Kuby</label>
+    <label>{tr(lang, 'camera_label')} <select id="cam"><option value="">{tr(lang, 'camera_all')}</option><option>Fuji</option><option>GoPro</option></select></label>
+    <label class="chk"><input type="checkbox" id="onlyverdict"> {tr(lang, 'onlyverdict_label')}</label>
     {flag_filters}
-    <label>Szukaj <input type="search" id="q" placeholder="DSCF…" size="10"></label>
+    <label>{tr(lang, 'search_label')} <input type="search" id="q" placeholder="DSCF…" size="10"></label>
   </div>
 
   <section class="grid" id="grid">
     {''.join(cards)}
   </section>
-  <p class="empty" id="empty" hidden>Nic nie pasuje do filtrów.</p>
+  <p class="empty" id="empty" hidden>{tr(lang, 'empty_msg')}</p>
 </div>
 <script>
 (function(){{
   var grid=document.getElementById('grid'), cards=Array.prototype.slice.call(grid.children);
-  var sortSel=document.getElementById('sort'), camSel=document.getElementById('cam'), onlyKuba=document.getElementById('onlykuba'), q=document.getElementById('q');
+  var sortSel=document.getElementById('sort'), camSel=document.getElementById('cam'), onlyVerdict=document.getElementById('onlyverdict'), q=document.getElementById('q');
   var flagBoxes=Array.prototype.slice.call(document.querySelectorAll('input[data-flag]'));
   function num(el,k){{return parseFloat(el.dataset[k]||'0')||0;}}
   function apply(){{
-    var s=sortSel.value, cam=camSel.value, kuba=onlyKuba.checked, needle=(q.value||'').trim().toLowerCase();
+    var s=sortSel.value, cam=camSel.value, verdict=onlyVerdict.checked, needle=(q.value||'').trim().toLowerCase();
     var flags=flagBoxes.filter(function(b){{return b.checked;}}).map(function(b){{return b.dataset.flag;}});
     var sorted=cards.slice().sort(function(a,b){{
       if(s==='id') return a.dataset.id.localeCompare(b.dataset.id);
@@ -301,7 +323,7 @@ details.legend dd{{margin:0;max-width:70ch}}
     sorted.forEach(function(c){{
       var ok=true;
       if(cam && c.dataset.cam!==cam) ok=false;
-      if(kuba && c.dataset.kuba!=='1') ok=false;
+      if(verdict && c.dataset.verdict!=='1') ok=false;
       if(needle && c.dataset.id.toLowerCase().indexOf(needle)<0) ok=false;
       if(flags.length){{var f=(c.dataset.flags||'').split(' ');ok=ok&&flags.every(function(x){{return f.indexOf(x)>=0;}});}}
       c.hidden=!ok; if(ok) shown++;
@@ -309,7 +331,7 @@ details.legend dd{{margin:0;max-width:70ch}}
     }});
     document.getElementById('empty').hidden=shown>0;
   }}
-  [sortSel,camSel,onlyKuba,q].concat(flagBoxes).forEach(function(el){{el.addEventListener('change',apply);el.addEventListener('input',apply);}});
+  [sortSel,camSel,onlyVerdict,q].concat(flagBoxes).forEach(function(el){{el.addEventListener('change',apply);el.addEventListener('input',apply);}});
   grid.addEventListener('click',function(e){{
     var btn=e.target.closest('.imgbtn'); if(!btn) return;
     var thumb=btn.closest('.thumb'), img0=thumb.querySelector('img');

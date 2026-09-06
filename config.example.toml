@@ -7,7 +7,7 @@
 # relative to your current directory.
 #
 # Override order (highest wins): CLI flags > environment variables
-# (EYES_OUT, EYES_CONFIG) > this file > built-in defaults.
+# (EYES_OUT, EYES_CONFIG, EYES_LANG) > this file > built-in defaults.
 
 # Root folder for all output when no other path is configured: frame/scope
 # caches, logs, progress files, and (by default) reports.
@@ -33,3 +33,10 @@
 # entirely and applies one LUT to every clip regardless of camera.
 # [lut]
 # fuji = "C:/path/to/FLog_to_Rec709.cube"
+
+# Interface language for the review page (`review`) and the clip profile
+# chart (`profile`, and `measure`/`batch`, which also draw the profile
+# chart while measuring). Only "pl" or "en" are valid.
+# Override order (highest wins): CLI flag (--lang) > EYES_LANG (env) >
+# this key > built-in default "en".
+# lang = "en"

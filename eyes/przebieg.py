@@ -9,6 +9,7 @@ bez zmiany specyfikacji.
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -19,6 +20,10 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from matplotlib import transforms  # noqa: E402
 from matplotlib.collections import LineCollection  # noqa: E402
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+from eyes.i18n import t  # noqa: E402
 
 # --- paleta (WYLACZNIE te kolory - zwalidowana dla ciemnego tla) ---
 TLO = "#1a1a19"
@@ -103,11 +108,12 @@ def _prog_poziomy(ax, wartosc: float | None, etykieta: str) -> None:
     )
 
 
-def _seria_z_pewnoscia(ax, t_s: list[int], wartosci: list, conf: list, kolor: str, domyslny_top: float) -> None:
+def _seria_z_pewnoscia(ax, t_s: list[int], wartosci: list, conf: list, kolor: str, domyslny_top: float, offscale_text: str) -> None:
     """Linia 2px z gapami (None -> NaN) - segmenty dotykajace sekundy o
     conf < 0.3 rysowane sciszone (alpha 0.35), zeby niepewny tracking nie
     wygladal jak fakt. Os Y 0..max(domyslny_top, p95*1.2), z przycieciem
-    wartosci powyzej i etykieta '(uparrow) poza skale' jesli cos przycieto."""
+    wartosci powyzej i etykieta `offscale_text` (przetlumaczona przez
+    wywolujacego, patrz eyes/i18n.py) jesli cos przycieto."""
     t = np.asarray(t_s, dtype=float)
     y = np.array([np.nan if v is None else float(v) for v in wartosci], dtype=float)
     c = np.array([0.0 if v is None else float(v) for v in conf], dtype=float)
@@ -135,15 +141,18 @@ def _seria_z_pewnoscia(ax, t_s: list[int], wartosci: list, conf: list, kolor: st
 
     if przycieto:
         ax.annotate(
-            "↑ poza skalę", xy=(0.99, 0.94), xycoords="axes fraction",
+            offscale_text, xy=(0.99, 0.94), xycoords="axes fraction",
             ha="right", va="top", color=WYCISZONY, fontsize=8, zorder=6,
         )
 
 
-def render_przebieg(report: dict, out_path: Path) -> Path | None:
+def render_przebieg(report: dict, out_path: Path, lang: str = "en") -> Path | None:
     """Rysuje PNG 960x540 'przebieg ujecia' z danych JUZ obecnych w `report`.
     Zwraca `out_path` gdy narysowano, `None` (i nic nie zapisuje) gdy w
-    raporcie brakuje `tonalnosc.profil` (stare raporty sprzed tej funkcji)."""
+    raporcie brakuje `tonalnosc.profil` (stare raporty sprzed tej funkcji).
+
+    `lang`: jezyk napisow na wykresie ("pl" albo "en", patrz eyes/i18n.py).
+    Domyslnie "en", zgodnie z domyslnym jezykiem narzedzia (eyes/config.py)."""
     profil_jasnosci = (report.get("tonalnosc") or {}).get("profil")
     if not profil_jasnosci:
         return None
@@ -181,19 +190,19 @@ def render_przebieg(report: dict, out_path: Path) -> Path | None:
         _rysuj_pasy_stabilne(ax, odcinki, srodek)
     ax1.tick_params(labelbottom=False)
     ax2.tick_params(labelbottom=False)
-    ax3.set_xlabel("sekundy", color=DRUGORZEDNY, fontsize=8, labelpad=4)
+    ax3.set_xlabel(t(lang, "przebieg_xlabel"), color=DRUGORZEDNY, fontsize=8, labelpad=4)
 
     if srodek is not None:
         cx = (srodek["od_s"] + srodek["do_s"] + 1) / 2.0
         blended2 = transforms.blended_transform_factory(ax2.transData, ax2.transAxes)
         ax2.text(
-            cx, 0.90, "stabilny", transform=blended2, ha="center", va="top",
+            cx, 0.90, t(lang, "przebieg_stable"), transform=blended2, ha="center", va="top",
             color=DRUGORZEDNY, fontsize=8, zorder=6,
         )
 
     # --- panel 1: jasnosc po LUT ---
     ax1.set_title(
-        "jasność po LUT · p5 czerń · p50 środek · p99 światła",
+        t(lang, "przebieg_panel1_title"),
         loc="left", color=DRUGORZEDNY, fontsize=9, pad=8,
     )
     t1 = [p["t_s"] for p in profil_jasnosci]
@@ -212,27 +221,27 @@ def render_przebieg(report: dict, out_path: Path) -> Path | None:
     legenda.get_frame().set_alpha(0.8)
 
     # --- panel 2: jitter ---
-    ax2.set_title("drganie (jitter, % szerokości kadru)", loc="left", color=DRUGORZEDNY, fontsize=9, pad=8)
+    ax2.set_title(t(lang, "przebieg_panel2_title"), loc="left", color=DRUGORZEDNY, fontsize=9, pad=8)
     t2 = [p["t_s"] for p in ruch_profil]
     _seria_z_pewnoscia(
         ax2, t2, [p["jitter_pct"] for p in ruch_profil], [p["conf"] for p in ruch_profil],
-        KOLOR_SERIA, domyslny_top=1.0,
+        KOLOR_SERIA, domyslny_top=1.0, offscale_text=t(lang, "przebieg_offscale"),
     )
-    _prog_poziomy(ax2, prog_jitter, "próg stabilności")
+    _prog_poziomy(ax2, prog_jitter, t(lang, "przebieg_threshold"))
 
     # --- panel 3: ruch zamierzony ---
-    ax3.set_title("ruch zamierzony (% szerokości kadru na s)", loc="left", color=DRUGORZEDNY, fontsize=9, pad=8)
+    ax3.set_title(t(lang, "przebieg_panel3_title"), loc="left", color=DRUGORZEDNY, fontsize=9, pad=8)
     t3 = [p["t_s"] for p in ruch_profil]
     _seria_z_pewnoscia(
         ax3, t3, [p["ruch_pct"] for p in ruch_profil], [p["conf"] for p in ruch_profil],
-        KOLOR_SERIA, domyslny_top=5.0,
+        KOLOR_SERIA, domyslny_top=5.0, offscale_text=t(lang, "przebieg_offscale"),
     )
-    _prog_poziomy(ax3, prog_ruch, "próg stabilności")
+    _prog_poziomy(ax3, prog_ruch, t(lang, "przebieg_threshold"))
 
     for ax in (ax1, ax2, ax3):
         ax.set_xlim(0, czas_s)
 
-    naglowek = f"{id_} · {kamera} · {_fmt_czas(czas_s)} s · przebieg ujęcia v0.2"
+    naglowek = f"{id_} · {kamera} · {_fmt_czas(czas_s)} s · {t(lang, 'przebieg_header_suffix')}"
     fig.text(0.018, 0.975, naglowek, color=GLOWNY, fontsize=9, ha="left", va="top")
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
