@@ -17,6 +17,7 @@ import argparse
 import datetime
 import json
 import os
+import platform
 import subprocess
 import time
 from pathlib import Path
@@ -240,7 +241,7 @@ def process_file(path: Path, *, args, cfg, hash_by_path: dict, file_paths: list[
         "gpu": gpu_used,
         "ffmpeg": get_ffmpeg_version(),
         "opencv": cv2.__version__,
-        "host": "laptop",
+        "host": platform.node(),
     }
 
     report = report_mod.build_report(
