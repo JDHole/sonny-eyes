@@ -1,5 +1,7 @@
 # sonny-eyes
 
+Archiwalny README techniczny z 2026-09-05, część opisów uruchamiania jest nieaktualna; aktualne wejście: README.md
+
 ## Uruchamianie (od 2026-09-06)
 
 Jedno wejscie: `python -m eyes <podkomenda>` (`.venv/Scripts/python.exe -m eyes ...`).
@@ -7,7 +9,8 @@ Podkomendy: `measure` (pojedynczy pomiar), `batch` (folder rekurencyjnie,
 `--detach` odpala go jako proces w tle), `review` (strona HTML z przegladem),
 `profile` (dorysowanie wykresu przebiegu z istniejacego raportu), `dupes`
 (lista kandydatow-duplikatow), `status`/`stop` (podglad i ubicie procesu
-odpalonego z `--detach`), `mcp` (placeholder). `--help` na kazdej podkomendzie
+odpalonego z `--detach`), `mcp` (dziala - startuje serwer MCP nad stdio,
+osiem narzedzi, patrz docs/mcp.md). `--help` na kazdej podkomendzie
 pokazuje jej opcje; wspolne dla wiekszosci: `--out` (jeden folder wyjsciowy),
 `--config` (jawna sciezka do config.toml), `--lut`/`--no-gpu` (measure/batch).
 
