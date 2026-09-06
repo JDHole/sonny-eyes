@@ -1,3 +1,8 @@
+# Full development environment (author's .venv), incl. optional/future
+# tooling (torch, scenedetect, imagededup, rawpy, siti-tools) not imported
+# by the shipped eyes/scripts/tests code. End users who just want to run
+# measure/batch/review should install requirements.txt instead - it lists
+# only the packages actually imported, pinned to the same versions here.
 annotated-types==0.8.0
 anyio==4.15.1
 attrs==26.1.0
