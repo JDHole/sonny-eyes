@@ -106,11 +106,11 @@ async def run() -> None:
 
                 # --- probe_clip na realnym klipie Fuji ---
                 if not FUJI_FOLDER.is_dir():
-                    check(False, f"folder testowy nie istnieje, pomijam probe/measure/list/get/review: {FUJI_FOLDER}")
+                    print(f"SKIP: folder z materialem autora nie istnieje, pomijam probe/measure/list/get/review: {FUJI_FOLDER}")
                 else:
                     clips = sorted(FUJI_FOLDER.glob("DSCF*.MOV"))
                     if not clips:
-                        check(False, f"brak DSCF*.MOV w {FUJI_FOLDER}")
+                        print(f"SKIP: brak DSCF*.MOV w {FUJI_FOLDER}, pomijam czesc pomiarowa")
                         clips = []
                     else:
                         clip = clips[0]

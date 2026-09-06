@@ -294,7 +294,7 @@ while measuring - see `--lang` in the "Configuration" section).
 python tests/test_smoke.py
 ```
 
-The gate does not use pytest: files in `tests/` are run as plain scripts. `test_smoke.py` checks reports from the author's own footage, so on your machine start with `tests/test_config.py`, `tests/test_cli.py` and `tests/test_review_lang.py` (the third one exits cleanly with a skip, code 0, when the author's material is missing). `tests/test_mcp.py` also reaches for a Fuji clip on the author's drive: without it, it only skips the measurement part (`measure_clip`, `list_reports`, `get_report`, `review_page`), but it still records that as a failure, so on your machine you will see `TEST_MCP: FAIL` even though the MCP tool list and `batch_status` pass - that is expected, not a bug in the code.
+The gate does not use pytest: files in `tests/` are run as plain scripts. `test_smoke.py` checks reports from the author's own footage, so on your machine start with `tests/test_config.py`, `tests/test_cli.py` and `tests/test_review_lang.py` (the third one exits cleanly with a skip, code 0, when the author's material is missing). `tests/test_mcp.py` without the author's footage checks only the tool list and `batch_status`, and skips the measurement part with a SKIP message.
 
 ## For AI agents
 

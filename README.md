@@ -288,7 +288,7 @@ patrz `--lang` w sekcji "Konfiguracja").
 python tests/test_smoke.py
 ```
 
-Bramka bez pytest: pliki w `tests/` uruchamia się jako zwykłe skrypty. `test_smoke.py` sprawdza raporty z materiału autora, więc u siebie zacznij od `tests/test_config.py`, `tests/test_cli.py` i `tests/test_review_lang.py` (ten trzeci bez materiału autora kończy się czystym pominięciem, kodem 0). `tests/test_mcp.py` też sięga po klip Fuji z dysku autora: bez niego pomija samą część pomiarową (`measure_clip`, `list_reports`, `get_report`, `review_page`), ale mimo to zgłasza to jako niepowodzenie, więc u siebie zobaczysz `TEST_MCP: FAIL` mimo że lista narzędzi MCP i `batch_status` przechodzą - to oczekiwane, nie błąd w kodzie.
+Bramka bez pytest: pliki w `tests/` uruchamia się jako zwykłe skrypty. `test_smoke.py` sprawdza raporty z materiału autora, więc u siebie zacznij od `tests/test_config.py`, `tests/test_cli.py` i `tests/test_review_lang.py` (ten trzeci bez materiału autora kończy się czystym pominięciem, kodem 0). `tests/test_mcp.py` bez materiału autora sprawdza tylko listę narzędzi i `batch_status`, a część pomiarową pomija z komunikatem SKIP.
 
 ## Dla agentów AI
 
