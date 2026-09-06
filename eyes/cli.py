@@ -89,9 +89,10 @@ def measure(project, files_, extra_paths, out, config_path, lut, no_gpu, force, 
 def batch(project, folder, extra_folders, porcja, force, no_gpu, limit, out, config_path, lut, detach) -> None:
     """Scan folder(s) recursively and measure every camera clip found."""
     folder = tuple(folder) + tuple(extra_folders)
-    argv = ["--project", project]
-    for f in folder:
-        argv += ["--folder", f]
+    # JEDNA flaga --folder z wszystkimi sciezkami: cmd_batch ma argparse nargs="+",
+    # a powtorzona flaga (--folder a --folder b) nadpisuje poprzednia wartosc,
+    # wiec przemial widzialby tylko ostatni folder.
+    argv = ["--project", project, "--folder", *folder]
     if porcja:
         argv += ["--porcja", porcja]
     if force:

@@ -104,6 +104,7 @@ def test_batch_forms() -> None:
     result = runner.invoke(cli_mod.cli, ["batch", "--project", "T", "--folder", "f1", "--folder", "f2"])
     check(result.exit_code == 0, f"batch --folder f1 --folder f2: exit_code={result.exit_code}, output={result.output!r}, exc={result.exception!r}")
     check(_values_after(captured.get("argv", []), "--folder") == ["f1", "f2"], f"batch --folder f1 --folder f2: argv niepoprawne: {captured.get('argv')}")
+    check(captured.get("argv", []).count("--folder") == 1, f"batch: flaga --folder musi wystapic RAZ (argparse nargs='+' nadpisuje powtorzona): {captured.get('argv')}")
 
     captured.clear()
     result = runner.invoke(cli_mod.cli, ["batch", "--project", "T", "--folder", "f1", "f2"])
