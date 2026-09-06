@@ -26,7 +26,7 @@ Enkoder wizyjny jest trenowany tak, żeby dopasować obraz do TEKSTU (trening
 kontrastywny obraz-opis), a nie żeby zachować wierność fotometryczną. Nikt tej
 sieci nigdy nie uczył trzymać wartości luminancji. Efekt jest przewidywalny:
 model uczciwie powie "ciepłe", "płaskie", "przepalone", ale nie powie "czerń na
-6 IRE" ani "300 K za ciepło". Sonny, agent, dla którego to narzędzie powstało,
+6 IRE" ani "300 K za ciepło". Asystent AI używany przy postprodukcji
 podsumował to tak: *"widzę treść i nastrój kadru, nie widzę wartości, a filmu
 nie widzę w ogóle, bo dostaję garść nieruchomych zdjęć."*
 
@@ -44,10 +44,12 @@ Konkret z prawdziwego materiału: kamera nagrywa 50 klatek na sekundę, okno
 widoczne" - nie ma ich. A stabilność, judder, duplikaty klatek i tempo montażu
 są właśnie własnością relacji MIĘDZY klatkami, nie pojedynczej klatki.
 
-Benchmarki mówią to samo liczbami. **ColorBench**: podanie dokładnego koloru
-punktu to najtrudniejsze zadanie percepcyjne w całym zbiorze, najlepszy wynik
-57.3%; rozpoznanie dominującego koloru idzie znacznie lepiej (najlepszy 82.9%
-przy człowieku 92.0%) - czyli kategoria tak, wartość nie. **ShotBench**
+Benchmarki mówią to samo liczbami. **ColorBench**: podanie dokładnego kodu
+koloru piksela (zadanie "Color Extraction") to jedno z najtrudniejszych zadań
+percepcyjnych w zbiorze, najlepszy wynik 63.5% (ColorBench, arXiv:2504.10514,
+2025); nazwanie/rozpoznanie koloru obiektu ("Color Recognition") idzie
+znacznie lepiej (najlepszy 82.9%, przy człowieku 92.0%) - czyli kategoria tak,
+wartość nie. **ShotBench**
 (3.5k eksperckich pytań z ponad 200 filmów, 24 modele): najlepszy poniżej 60%
 średniej, a ruch kamery to najtrudniejszy wymiar - GPT-4o 48.3%, Qwen2.5-VL-72B
 48.9%, Gemini-2.5-flash 43.5%. **CameraBench** testuje wprost skalę
@@ -286,7 +288,7 @@ patrz `--lang` w sekcji "Konfiguracja").
 python tests/test_smoke.py
 ```
 
-Bramka bez pytest: pliki w `tests/` uruchamia się jako zwykłe skrypty. `test_smoke.py` sprawdza raporty z materiału autora, więc u siebie zacznij od `tests/test_config.py`, `tests/test_cli.py` i `tests/test_mcp.py`.
+Bramka bez pytest: pliki w `tests/` uruchamia się jako zwykłe skrypty. `test_smoke.py` sprawdza raporty z materiału autora, więc u siebie zacznij od `tests/test_config.py`, `tests/test_cli.py` i `tests/test_review_lang.py` (ten trzeci bez materiału autora kończy się czystym pominięciem, kodem 0). `tests/test_mcp.py` też sięga po klip Fuji z dysku autora: bez niego pomija samą część pomiarową (`measure_clip`, `list_reports`, `get_report`, `review_page`), ale mimo to zgłasza to jako niepowodzenie, więc u siebie zobaczysz `TEST_MCP: FAIL` mimo że lista narzędzi MCP i `batch_status` przechodzą - to oczekiwane, nie błąd w kodzie.
 
 ## Dla agentów AI
 
@@ -553,21 +555,24 @@ Każde wejście CLI woła na starcie `sys.stdout.reconfigure(encoding="utf-8")`
 Ścieżki ze znakiem `#` i spacjami działają bez escapowania, bo wywołania
 ffmpeg i ffprobe idą przez `subprocess.run` z listą argumentów, bez powłoki.
 
-## Skąd to się wzięło
+## Przypadek użycia
 
-To jest wycinek JDHole OS, systemu życia i produkcji jednego twórcy wideo,
-w którym pracuje dwunastu agentów AI o wydzielonych domenach. Sonny odpowiada
-za kolor i postprodukcję. Przez cztery odcinki serii Canarian Tweety (około
-1111 klipów, 1 TB surówki z Fuji i GoPro) każde "czy to dobrze wygląda" szło
-przez oko autora, bo agent fizycznie nie widział materiału - i za każdym razem,
-gdy udawał, że widzi, kosztowało to godziny (rewert 516 instancji grade'u,
-36 renderów bez wartości, WARMTH no-op przez cały odcinek). `sonny-eyes`
-powstał jako odpowiedź: nie kolejny model, tylko warstwa pomiaru pod modelem.
-Wychodzi jako open source, bo research pod ten projekt pokazał realną dziurę -
-pomiar (a nie naprawa) trzęsienia kamery praktycznie nie ma repozytoriów, a
-najlepsze skorery jakości obrazu mają licencje niekomercyjne, więc nie da się
-ich użyć w monetyzowanej produkcji. Jeśli komuś to oszczędzi tych samych
-godzin, robota się zwróciła drugi raz.
+Typowy przebieg pracy: twórca wideo wraca z nagrania i chce pokazać materiał
+modelowi AI, żeby razem z nim pracować na liczbach, nie na wrażeniach. Mierzy
+porcję klipów z kamery (`eyes batch --folder ...`), otwiera stronę przeglądu i
+widzi cegły z liczbami, flagami i klasą ruchu każdego ujęcia. Prosi asystenta -
+przez serwer MCP - o selekcję: "wybierz ujęcia ostre i bez drgań z tego dnia"
+albo "które klipy mają zabitą czerń". Asystent odpowiada, cytując konkretne
+pola z raportu (`ostrosc.lapvar`, `ruch.klasa`, `tonalnosc.p1`), nie
+ogólnikami w stylu "wygląda nieźle". Koszt braku takiego pomiaru widać w
+przykładach z sekcji "Problem" wyżej: WARMTH jako no-op przez cały odcinek i
+36 renderów porównawczych, w których delty były praktycznie niewidoczne.
+`sonny-eyes` powstał, żeby ten koszt się nie powtarzał - nie jako kolejny
+model, tylko jako warstwa pomiaru pod modelem. Wychodzi jako open source, bo
+research pod ten projekt pokazał realną dziurę: pomiar (a nie naprawa)
+trzęsienia kamery praktycznie nie ma repozytoriów, a najlepsze skorery
+jakości obrazu mają licencje niekomercyjne, więc nie da się ich użyć w
+monetyzowanej produkcji.
 
 ## Licencja
 
