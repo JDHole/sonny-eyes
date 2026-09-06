@@ -186,9 +186,11 @@ def stop(project, out, config_path) -> None:
 
 @cli.command()
 def mcp() -> None:
-    """MCP server (not implemented yet - placeholder for a future session)."""
-    click.echo("MCP server: not implemented yet")
-    sys.exit(2)
+    """Run the MCP server over stdio (tools: probe_clip, measure_clip, get_report,
+    list_reports, batch_start, batch_status, batch_stop, review_page)."""
+    from eyes.mcp_server import server
+
+    server.run(transport="stdio")
 
 
 @cli.command(name="_sleep", hidden=True)
