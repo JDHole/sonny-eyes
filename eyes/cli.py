@@ -45,7 +45,12 @@ def cli() -> None:
 
 @cli.command()
 @click.option("--project", required=True, help="Project name (groups reports/cache).")
-@click.option("--files", "files_", required=True, multiple=True, help="One or more clip paths to measure.")
+@click.option(
+    "--files", "files_", required=True, multiple=True, metavar="FILE...",
+    help="Clip path(s) to measure. Additional paths can be given after the first, "
+    "either as --files a.mov b.mov or repeated --files a.mov --files b.mov.",
+)
+@click.argument("extra_paths", nargs=-1, type=click.UNPROCESSED, metavar="[FILE...]")
 @click.option("--out", default=None, help="Output root override (out_root/cache_root/reports_root).")
 @click.option("--config", "config_path", default=None, help="Explicit path to config.toml.")
 @click.option("--lut", default=None, help="Force this LUT on every clip, regardless of camera.")
@@ -53,8 +58,9 @@ def cli() -> None:
 @click.option("--force", is_flag=True, default=False, help="Re-measure even if a report already exists.")
 @click.option("--window-start", type=float, default=5.0, show_default=True, help="Measurement window start (seconds).")
 @click.option("--window-len", type=float, default=20.0, show_default=True, help="Measurement window length (seconds).")
-def measure(project, files_, out, config_path, lut, no_gpu, force, window_start, window_len) -> None:
+def measure(project, files_, extra_paths, out, config_path, lut, no_gpu, force, window_start, window_len) -> None:
     """Measure one or more clips and write a perception report per clip."""
+    files_ = tuple(files_) + tuple(extra_paths)
     argv = ["--project", project, "--files", *files_]
     argv += _out_config_lut_argv(out, config_path, lut, no_gpu)
     if force:
@@ -65,7 +71,12 @@ def measure(project, files_, out, config_path, lut, no_gpu, force, window_start,
 
 @cli.command()
 @click.option("--project", required=True, help="Project name.")
-@click.option("--folder", required=True, multiple=True, help="One or more folders to scan recursively for camera files.")
+@click.option(
+    "--folder", required=True, multiple=True, metavar="FOLDER...",
+    help="Folder(s) to scan recursively for camera files. Additional folders can be given "
+    "after the first, either as --folder a b or repeated --folder a --folder b.",
+)
+@click.argument("extra_folders", nargs=-1, type=click.UNPROCESSED, metavar="[FOLDER...]")
 @click.option("--porcja", default=None, help="Batch label recorded in _postep.json (default: first folder's name).")
 @click.option("--force", is_flag=True, default=False, help="Re-measure even if a report already exists.")
 @click.option("--no-gpu", is_flag=True, default=False, help="Force CPU decoding.")
@@ -74,8 +85,9 @@ def measure(project, files_, out, config_path, lut, no_gpu, force, window_start,
 @click.option("--config", "config_path", default=None, help="Explicit path to config.toml.")
 @click.option("--lut", default=None, help="Force this LUT on every clip, regardless of camera.")
 @click.option("--detach", is_flag=True, default=False, help="Run as a detached background process; prints {pid,...} JSON and returns immediately.")
-def batch(project, folder, porcja, force, no_gpu, limit, out, config_path, lut, detach) -> None:
+def batch(project, folder, extra_folders, porcja, force, no_gpu, limit, out, config_path, lut, detach) -> None:
     """Scan folder(s) recursively and measure every camera clip found."""
+    folder = tuple(folder) + tuple(extra_folders)
     argv = ["--project", project]
     for f in folder:
         argv += ["--folder", f]
@@ -123,12 +135,20 @@ def review(project, out_file, out, config_path, compact, status_text) -> None:
 
 
 @cli.command()
-@click.option("--project", required=True, help="Project name.")
-@click.option("--ids", multiple=True, default=None, help="Only these report ids (default: every report in the project).")
+@click.option(
+    "--project", required=True, help="Project name.",
+)
+@click.option(
+    "--ids", multiple=True, default=None, metavar="ID...",
+    help="Only these report ids (default: every report in the project). Additional ids can be "
+    "given after the first, either as --ids a b or repeated --ids a --ids b.",
+)
+@click.argument("extra_ids", nargs=-1, type=click.UNPROCESSED, metavar="[ID...]")
 @click.option("--out", default=None, help="Output root override.")
 @click.option("--config", "config_path", default=None, help="Explicit path to config.toml.")
-def profile(project, ids, out, config_path) -> None:
+def profile(project, ids, extra_ids, out, config_path) -> None:
     """Redraw the 'clip profile' PNG from an existing report, without re-measuring."""
+    ids = tuple(ids) + tuple(extra_ids)
     argv = ["--project", project]
     if ids:
         argv += ["--ids", *ids]
