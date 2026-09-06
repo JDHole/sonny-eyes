@@ -27,7 +27,7 @@ The vision encoder is trained to match images to TEXT (contrastive image-caption
 training), not to preserve photometric fidelity. Nobody ever trained that
 network to hold on to luminance values. The result is predictable: the model
 will honestly say "warm", "flat", "blown out", but it will not say "black at
-6 IRE" or "300 K too warm". Sonny, the agent this tool was built for, put it
+6 IRE" or "300 K too warm". The AI assistant used in post-production put it
 this way (translated from Polish): *"I see the content and the mood of a frame,
 I do not see values, and I do not see video at all, because what I get is a
 handful of stills."*
@@ -48,9 +48,11 @@ and editing rhythm are exactly the properties that live BETWEEN frames, not in
 a single frame.
 
 Benchmarks say the same thing in numbers. **ColorBench**: naming the exact
-color of a point is the hardest perceptual task in the whole suite, best score
-57.3%; recognizing the dominant color goes far better (best 82.9% against 92.0%
-for humans) - category yes, value no. **ShotBench** (3.5k expert questions from
+color code of a pixel (the "Color Extraction" task) is one of the hardest
+perceptual tasks in the suite, best score 63.5% (ColorBench, arXiv:2504.10514,
+2025); naming/recognizing an object's color (the "Color Recognition" task)
+goes far better (best 82.9%, against 92.0% for humans) - category yes, value
+no. **ShotBench** (3.5k expert questions from
 over 200 films, 24 models): the best model stays below 60% average, and camera
 movement is the hardest dimension - GPT-4o 48.3%, Qwen2.5-VL-72B 48.9%,
 Gemini-2.5-flash 43.5%. **CameraBench** tests a shakiness scale directly
@@ -292,7 +294,7 @@ while measuring - see `--lang` in the "Configuration" section).
 python tests/test_smoke.py
 ```
 
-The gate does not use pytest: files in `tests/` are run as plain scripts. `test_smoke.py` checks reports from the author's own footage, so on your machine start with `tests/test_config.py`, `tests/test_cli.py` and `tests/test_mcp.py`.
+The gate does not use pytest: files in `tests/` are run as plain scripts. `test_smoke.py` checks reports from the author's own footage, so on your machine start with `tests/test_config.py`, `tests/test_cli.py` and `tests/test_review_lang.py` (the third one exits cleanly with a skip, code 0, when the author's material is missing). `tests/test_mcp.py` also reaches for a Fuji clip on the author's drive: without it, it only skips the measurement part (`measure_clip`, `list_reports`, `get_report`, `review_page`), but it still records that as a failure, so on your machine you will see `TEST_MCP: FAIL` even though the MCP tool list and `batch_status` pass - that is expected, not a bug in the code.
 
 ## For AI agents
 
@@ -564,21 +566,24 @@ stderr) on startup, and all files are written and read as UTF-8. Paths
 containing `#` and spaces work without escaping, because all ffmpeg and ffprobe
 calls go through `subprocess.run` with an argument list, without a shell.
 
-## Where this came from
+## Use case
 
-This is a slice of JDHole OS, one video creator's life and production system,
-where twelve AI agents each own a domain. Sonny owns color and post. Across
-four episodes of the Canarian Tweety series (roughly 1111 clips, 1 TB of Fuji
-and GoPro footage) every "does this look right" went through the author's eyes,
-because the agent physically could not see the material - and every time it
-pretended it could, it cost hours (a revert of 516 grade instances, 36
-worthless renders, WARMTH as a no-op for a whole episode). `sonny-eyes` is the
-answer to that: not another model, but the measurement layer underneath one. It
-goes open source because the research behind the project found a real gap -
-measuring (rather than fixing) camera shake has practically no repositories,
-and the best image-quality scorers ship non-commercial licences, so they cannot
-be used in monetized production. If it saves someone else those same hours, the
-work paid for itself twice.
+Typical workflow: a video creator comes back from a shoot and wants to show
+the footage to an AI model, so they can work on it together using numbers
+instead of impressions. They measure a batch of clips from the camera
+(`eyes batch --folder ...`), open the review page, and see bricks with
+numbers, flags and a motion class for every shot. They ask the assistant -
+over the MCP server - to select: "pick the sharp, steady shots from this day"
+or "which clips have crushed blacks". The assistant answers by quoting actual
+fields from the report (`ostrosc.lapvar`, `ruch.klasa`, `tonalnosc.p1`), not
+generic impressions like "looks decent". The cost of not measuring shows up in
+the examples from the "Problem" section above: WARMTH as a no-op for an entire
+episode, and 36 comparison renders whose deltas were practically invisible.
+`sonny-eyes` exists so that cost does not repeat - not another model, but the
+measurement layer underneath one. It goes open source because the research
+behind the project found a real gap: measuring (rather than fixing) camera
+shake has practically no repositories, and the best image-quality scorers ship
+non-commercial licences, so they cannot be used in monetized production.
 
 ## License
 
