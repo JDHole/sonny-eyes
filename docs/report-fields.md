@@ -309,4 +309,4 @@ Explicit statement of what could compromise this particular measurement.
 | `pomiar.gpu` | boolean | `true` when BOTH samples decoded with GPU acceleration. | See `niepewnosc.gpu_fallback_cpu` for the partial case. |
 | `pomiar.ffmpeg` | string | ffmpeg version string, as reported by `ffmpeg -version`. | `"unknown"` when the call failed. |
 | `pomiar.opencv` | string | OpenCV version used. | |
-| `pomiar.host` | string | Machine label. | Hardcoded to `"laptop"` in this version; it is not detected. |
+| `pomiar.host` | string | Machine label. | `platform.node()` - the OS-reported hostname of the machine that ran the measurement, not a fixed value. |
