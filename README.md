@@ -67,8 +67,6 @@ za mało mordo"*, potem *"kompletnie nie widzę tego warmtha nigdzie"*, po
 podbiciu *"za żółto"*. Każda z tych rund to był przejazd człowieka w viewerze,
 bo pomiaru nie było.
 
-![Co widzi model bez pomiaru vs z pomiarem](docs/img/bez-pomiaru-vs-z-pomiarem.png) <!-- TODO screenshot -->
-
 ## Rozwiązanie: mierz, nie patrz
 
 Zasada jest jedna: **narzędzia mierzą, model interpretuje**. To narzędzie robi
@@ -248,7 +246,9 @@ klatka każdego klipu), liczbami, flagami, sortowaniem i filtrowaniem. Obrazy
 wchodzą jako data URI, więc plik działa bez dostępu do katalogu wyjściowego i
 można go wysłać jednym plikiem. `--out-file sciezka.html` dokłada kopię pod
 wskazaną ścieżką, `--compact` zamienia pełne PNG na małe JPEG-i (pod limity
-rozmiaru artefaktów), `--status "tekst"` wstawia baner na górze strony.
+rozmiaru artefaktów), `--status "tekst"` wstawia baner na górze strony,
+`--lang pl|en` ustawia język strony (domyślnie `en`; patrz też klucz `lang` w
+config.toml i zmienna `EYES_LANG` w sekcji "Konfiguracja").
 
 ### Duplikaty
 
@@ -276,6 +276,9 @@ Trzy panele na wspólnej osi czasu: jasność po LUT (p5 / p50 / p99), drganie
 (jitter jako procent szerokości kadru) i ruch zamierzony (procent szerokości
 kadru na sekundę), z zaznaczonymi progami i odcinkami stabilnymi. Raport bez
 pola `tonalnosc.profil` (sprzed tej funkcji) jest pomijany z komunikatem.
+`--lang pl|en` ustawia język napisów na wykresie (domyślnie `en`; to samo
+`measure`/`batch` przyjmują, bo one też rysują ten wykres przy pomiarze -
+patrz `--lang` w sekcji "Konfiguracja").
 
 ### Test dymny
 
@@ -465,6 +468,11 @@ reports_root = "./eyes-out/{project}/reports"
 # nakładanego przed pomiarem klipów tej kamery.
 [lut]
 fuji = "C:/sciezka/do/FLog_to_Rec709.cube"
+
+# Język interfejsu strony przeglądu (`review`) i wykresu przebiegu
+# (`profile`, a także `measure`/`batch`, bo one też rysują wykres przebiegu
+# przy pomiarze). Tylko "pl" albo "en".
+# lang = "en"
 ```
 
 Kamera spoza tabeli `[lut]` (albo brak tabeli) jest mierzona bez LUT, co
@@ -476,13 +484,14 @@ Zmienne środowiskowe:
 
 - `EYES_OUT` - główny katalog wyjściowy, to samo co `out_root`.
 - `EYES_CONFIG` - jawna ścieżka do pliku `config.toml`.
+- `EYES_LANG` - język interfejsu, to samo co `lang` ("pl" albo "en").
 
 **Kolejność nadpisań (wygrywa pierwsze):** flagi CLI (`--out`, `--config`,
-`--lut`) > zmienne środowiskowe (`EYES_OUT`, `EYES_CONFIG`) > `config.toml` >
-wbudowane domyślne. `--out X` jest twardsze niż wygląda: ustawia naraz
-`out_root`, `cache_root` i `reports_root`, nadpisując także jawny
-`reports_root` z configu - inaczej `--out` do katalogu tymczasowego nadal
-pisałby raporty w miejscu z configu.
+`--lut`, `--lang`) > zmienne środowiskowe (`EYES_OUT`, `EYES_CONFIG`,
+`EYES_LANG`) > `config.toml` > wbudowane domyślne. `--out X` jest twardsze
+niż wygląda: ustawia naraz `out_root`, `cache_root` i `reports_root`,
+nadpisując także jawny `reports_root` z configu - inaczej `--out` do
+katalogu tymczasowego nadal pisałby raporty w miejscu z configu.
 
 ## Ograniczenia i pułapki
 

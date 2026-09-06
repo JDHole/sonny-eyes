@@ -17,7 +17,12 @@ Wspólne zasady:
 
 ---
 
-> Stan 2026-09-06: obrazki 1-4 wygenerowane automatycznie z wyników klipu DSCF0934 (Canarian Tweety EP03); `raport-json.png` przycięty do pierwszych 1500 px. Obrazek 5 (`bez-pomiaru-vs-z-pomiarem.png`) czeka na autora.
+> Stan 2026-09-06: obrazki 1-4 wygenerowane automatycznie z wyników klipu DSCF0934 (Canarian Tweety EP03); `raport-json.png` przycięty do pierwszych 1500 px. Obrazek `bez-pomiaru-vs-z-pomiarem.png` skasowany z README (plik nigdy nie powstał, dawał 404 na GitHubie) - brief niżej zostaje, gdyby ktoś kiedyś chciał go dorobić.
+>
+> Screeny 1 (`przeglad.png`) i 2 (`przebieg.png`) sa z WERSJI ANGIELSKIEJ
+> (`--lang en`) - narzedzie jest publiczne, wiec zrzuty w README maja byc
+> czytelne bez znajomosci polskiego. Przy regeneracji zawsze uzywaj `--lang en`
+> dla tych dwoch plikow.
 
 ## 1. `przeglad.png`
 
@@ -96,7 +101,10 @@ stronę żółci i pomarańczy). Neutralna szara scena nie pokaże niczego.
 
 ## 5. `bez-pomiaru-vs-z-pomiarem.png`
 
-**Gdzie:** README, koniec sekcji "Problem: jak AI ogląda film".
+**Gdzie:** obrazek NIE jest już linkowany z README (usunięty 2026-09-06 -
+plik nigdy nie powstał, dawał 404 na GitHubie). Jeśli kiedyś powstanie, miejsce
+docelowe to koniec sekcji "Problem: jak AI ogląda film" (PL) / "The problem:
+how AI watches video" (EN), tak jak niżej.
 Alt PL: "Co widzi model bez pomiaru vs z pomiarem".
 Alt EN: "What the model sees without measurement vs with it".
 

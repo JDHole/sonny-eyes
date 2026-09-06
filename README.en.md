@@ -70,8 +70,6 @@ all, too weak, dude"*, then *"I don't see that warmth anywhere"*, and after it
 was pushed harder, *"too yellow"*. Every one of those rounds was a human
 scrubbing through a viewer, because there was no measurement.
 
-![What the model sees without measurement vs with it](docs/img/bez-pomiaru-vs-z-pomiarem.png) <!-- TODO screenshot -->
-
 ## The solution: measure, do not look
 
 One rule: **tools measure, the model interprets**. This tool only does the
@@ -254,7 +252,9 @@ frame of each clip), numbers, flags, sorting and filtering. Images are embedded
 as data URIs, so the file works without access to the output directory and can
 be shared as one file. `--out-file path.html` writes an extra copy at the given
 path, `--compact` swaps full PNGs for small JPEGs (to fit artifact size
-limits), and `--status "text"` puts a banner at the top of the page.
+limits), `--status "text"` puts a banner at the top of the page, and
+`--lang pl|en` sets the page language (default `en`; see also the `lang` key
+in config.toml and the `EYES_LANG` variable in the "Configuration" section).
 
 ### Duplicates
 
@@ -282,7 +282,9 @@ again. Three panels on a shared time axis: brightness after the LUT (p5 / p50 /
 p99), jitter (as a percentage of frame width) and intended motion (percent of
 frame width per second), with thresholds and stable segments marked. A report
 without the `tonalnosc.profil` field (from before this feature existed) is
-skipped with a message.
+skipped with a message. `--lang pl|en` sets the chart's language (default
+`en`; `measure`/`batch` accept the same flag, since they also draw this chart
+while measuring - see `--lang` in the "Configuration" section).
 
 ### Smoke test
 
@@ -475,6 +477,11 @@ reports_root = "./eyes-out/{project}/reports"
 # file applied before measuring that camera's clips.
 [lut]
 fuji = "C:/path/to/FLog_to_Rec709.cube"
+
+# Interface language for the review page (`review`) and the clip profile
+# chart (`profile`, and `measure`/`batch`, which also draw the profile
+# chart while measuring). Only "pl" or "en".
+# lang = "en"
 ```
 
 A camera missing from the `[lut]` table (or an absent table) is measured
@@ -486,13 +493,14 @@ Environment variables:
 
 - `EYES_OUT` - root output folder, same as `out_root`.
 - `EYES_CONFIG` - explicit path to a `config.toml`.
+- `EYES_LANG` - interface language, same as `lang` ("pl" or "en").
 
-**Override order (first wins):** CLI flags (`--out`, `--config`, `--lut`) >
-environment variables (`EYES_OUT`, `EYES_CONFIG`) > `config.toml` > built-in
-defaults. `--out X` is stronger than it looks: it sets `out_root`, `cache_root`
-and `reports_root` at once, overriding even an explicit `reports_root` from the
-config file - otherwise `--out` pointing at a temp directory would still write
-reports to the configured location.
+**Override order (first wins):** CLI flags (`--out`, `--config`, `--lut`,
+`--lang`) > environment variables (`EYES_OUT`, `EYES_CONFIG`, `EYES_LANG`) >
+`config.toml` > built-in defaults. `--out X` is stronger than it looks: it
+sets `out_root`, `cache_root` and `reports_root` at once, overriding even an
+explicit `reports_root` from the config file - otherwise `--out` pointing at
+a temp directory would still write reports to the configured location.
 
 ## Limitations and gotchas
 
