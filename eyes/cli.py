@@ -20,6 +20,7 @@ import click
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+import eyes  # noqa: E402
 from eyes import cmd_batch, cmd_dupes, cmd_measure, cmd_profile, cmd_review, runner  # noqa: E402
 from eyes.config import load_config, overrides_from_out  # noqa: E402
 
@@ -38,7 +39,7 @@ def _out_config_lut_argv(out: str | None, config: str | None, lut: str | None, n
 
 
 @click.group()
-@click.version_option(package_name="sonny-eyes", prog_name="eyes")
+@click.version_option(version=eyes.__version__, prog_name="sonny-eyes")
 def cli() -> None:
     """sonny-eyes: perceptual measurement report for video clips (AI eyes for video)."""
 
