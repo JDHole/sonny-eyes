@@ -283,7 +283,7 @@ pola `tonalnosc.profil` (sprzed tej funkcji) jest pomijany z komunikatem.
 python tests/test_smoke.py
 ```
 
-Bramka bez pytest: pliki w `tests/` uruchamia się jako zwykłe skrypty.
+Bramka bez pytest: pliki w `tests/` uruchamia się jako zwykłe skrypty. `test_smoke.py` sprawdza raporty z materiału autora, więc u siebie zacznij od `tests/test_config.py`, `tests/test_cli.py` i `tests/test_mcp.py`.
 
 ## Dla agentów AI
 

@@ -290,7 +290,7 @@ skipped with a message.
 python tests/test_smoke.py
 ```
 
-The gate does not use pytest: files in `tests/` are run as plain scripts.
+The gate does not use pytest: files in `tests/` are run as plain scripts. `test_smoke.py` checks reports from the author's own footage, so on your machine start with `tests/test_config.py`, `tests/test_cli.py` and `tests/test_mcp.py`.
 
 ## For AI agents
 
