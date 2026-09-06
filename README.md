@@ -1,5 +1,27 @@
 # sonny-eyes
 
+## Uruchamianie (od 2026-09-06)
+
+Jedno wejscie: `python -m eyes <podkomenda>` (`.venv/Scripts/python.exe -m eyes ...`).
+Podkomendy: `measure` (pojedynczy pomiar), `batch` (folder rekurencyjnie,
+`--detach` odpala go jako proces w tle), `review` (strona HTML z przegladem),
+`profile` (dorysowanie wykresu przebiegu z istniejacego raportu), `dupes`
+(lista kandydatow-duplikatow), `status`/`stop` (podglad i ubicie procesu
+odpalonego z `--detach`), `mcp` (placeholder). `--help` na kazdej podkomendzie
+pokazuje jej opcje; wspolne dla wiekszosci: `--out` (jeden folder wyjsciowy),
+`--config` (jawna sciezka do config.toml), `--lut`/`--no-gpu` (measure/batch).
+
+Stare skrypty w `scripts/` (`measure.py`, `przemial.py`, `przeglad_html.py`,
+`przebieg.py`, `duplikaty.py`) dzialaja dalej - to teraz cienkie aliasy na
+te sama logike, zostawione dla zapisanych komend. Nowe funkcje (`--detach`,
+`status`, `stop`) sa dostepne wylacznie przez `python -m eyes`.
+
+Bez `config.toml` narzedzie dziala od razu, pisze wszystko pod `./eyes-out`
+wzgledem biezacego katalogu - patrz `config.example.toml` (skopiuj do
+`config.toml` i dopasuj sciezki/LUT-y u siebie).
+
+---
+
 Pomiar percepcyjny ujec wideo (raport ujecia v0). Bierze plik kamery,
 mierzy go ffmpegiem + numpy/OpenCV/scikit-image/colour-science na krotkim
 oknie, zapisuje JSON z liczbami plus miniaturki i skopy PNG. Zero AI, zero
@@ -13,15 +35,17 @@ przyszlosc).
 ## Jak odpalic
 
 ```
-.venv/Scripts/python.exe scripts/measure.py --project "Nazwa Projektu" --files sciezka1.mov sciezka2.mp4
+.venv/Scripts/python.exe -m eyes measure --project "Nazwa Projektu" --files sciezka1.mov sciezka2.mp4
 ```
 
-Opcje: `--cache-root X`, `--vault X` (nadpisuja config.toml), `--no-gpu`
-(wymusza dekodowanie CPU), `--force` (przelicza nawet gdy raport juz
-istnieje), `--window-start 5 --window-len 20` (domyslne okno dla klipow
->=30s; krotsze klipy mierzone sa w calosci od 0). Okno dotyczy metryk
-tonalnosc/kolor/ostrosc/szum - ruch ma wlasny, niezalezny zakres (patrz
-"Metryka ruchu v0.2" nizej).
+Opcje: `--out X` (nadpisuje out_root/cache_root/reports_root z config.toml),
+`--config X` (jawna sciezka do config.toml), `--lut X` (wymusza ten LUT na
+kazdym klipie, niezaleznie od kamery - inaczej LUT bierze sie z tabeli
+`[lut]` w config.toml po nazwie kamery), `--no-gpu` (wymusza dekodowanie
+CPU), `--force` (przelicza nawet gdy raport juz istnieje), `--window-start 5
+--window-len 20` (domyslne okno dla klipow >=30s; krotsze klipy mierzone sa
+w calosci od 0). Okno dotyczy metryk tonalnosc/kolor/ostrosc/szum - ruch ma
+wlasny, niezalezny zakres (patrz "Metryka ruchu v0.2" nizej).
 
 Test dymny (bramka, bez pytest):
 
@@ -31,11 +55,20 @@ Test dymny (bramka, bez pytest):
 
 ## Uklad danych
 
-- Raport: `{vault}/40_Pracownie/Analog Studio/Projekty/{project}/Color/reports/{id}.json`
+Wszystkie sciezki ponizej sa konfigurowalne (`config.toml`, patrz
+`config.example.toml`); bez configu domyslnie wszystko laduje pod
+`./eyes-out` wzgledem biezacego katalogu.
+
+- Raport: `{reports_root}/{id}.json`, gdzie `reports_root` domyslnie to
+  `{cache_root}/{project}/reports` (szablon ze znacznikiem `{project}`,
+  patrz `eyes/config.py`).
 - Cache: `{cache_root}/{project}/{id}/frames/*.png`, `.../scopes/*.png`,
   `{cache_root}/{project}/_log.jsonl` (jedna linia JSON per klip per
   uruchomienie: id, status ok/pominieto/blad, czas, wersja metryk),
-  `{cache_root}/_luts/` (kopie LUT-ow uzywanych do pomiaru, patrz nizej).
+  `{cache_root}/{project}/_postep.json` / `_runner.json` / `_batch.log`
+  (tylko przy `batch`/`batch --detach` - patrz `python -m eyes status/stop
+  --help`), `{cache_root}/_luts/` (kopie LUT-ow uzywanych do pomiaru,
+  patrz nizej).
 - `id` = nazwa pliku bez rozszerzenia (`DSCF3236`). Kolizja stem w jednej
   liscie `--files` -> `stem@nazwa_folderu_nadrzednego`. Identyczny
   `hash_4mb` (sha1 pierwszych 4 MB) jak wczesniejszy plik na liscie =
