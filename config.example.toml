@@ -1,0 +1,35 @@
+# sonny-eyes configuration template.
+#
+# Copy this file to "config.toml" (same folder) and edit as needed.
+# config.toml is gitignored - it is meant to hold your local, machine-
+# specific paths. Every key below is optional; with no config.toml at all
+# the tool works out of the box, writing everything under ./eyes-out
+# relative to your current directory.
+#
+# Override order (highest wins): CLI flags > environment variables
+# (EYES_OUT, EYES_CONFIG) > this file > built-in defaults.
+
+# Root folder for all output when no other path is configured: frame/scope
+# caches, logs, progress files, and (by default) reports.
+# Default: "./eyes-out" (relative to the current working directory).
+# out_root = "./eyes-out"
+
+# Root folder for the per-clip cache: frames, scopes, _log.jsonl,
+# _postep.json, _runner.json, _batch.log, and the shared _luts/ folder.
+# Default: same as out_root.
+# cache_root = "./eyes-out"
+
+# Where finished JSON reports are written. Must contain the literal
+# "{project}" placeholder - it is filled in with the --project name at
+# run time. Default: "{cache_root}/{project}/reports".
+# reports_root = "./eyes-out/{project}/reports"
+
+# Per-camera LUT table: key = camera name as it appears in the report's
+# zrodlo.kamera field, lowercased (currently "fuji" or "gopro"); value =
+# path to a .cube LUT file applied before measuring that camera's clips.
+# A camera missing from this table (or an empty/absent [lut] table) is
+# measured without a LUT - the report's niepewnosc.pomiar_bez_lut field
+# reflects this. The --lut command-line flag overrides this table
+# entirely and applies one LUT to every clip regardless of camera.
+# [lut]
+# fuji = "C:/path/to/FLog_to_Rec709.cube"
