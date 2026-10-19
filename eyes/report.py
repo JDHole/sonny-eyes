@@ -20,7 +20,12 @@ def round_floats(obj, nd: int = 3):
 def build_report(
     *, id_, projekt, zrodlo, stream, okno_pomiaru, tonalnosc, kolor, ostrosc,
     szum, ruch, plynnosc, montaz, klatki, skopy, flagi, progi, niepewnosc, pomiar,
+    exif=None, kadr=None, warianty=None, audio=None,
 ) -> dict:
+    """exif/kadr/warianty/audio: sekcje dodatkowe kontraktu foto/audio
+    (2026-09-12, wersja_metryk "0.2") - dopisywane na koniec TYLKO gdy podane
+    (nie None), zeby klucze raportu wideo (cmd_measure.py, ktory ich nie
+    przekazuje) zostaly dokladnie w dotychczasowej kolejnosci i ksztalcie."""
     report = {
         "wersja_metryk": "0.2",
         "id": id_,
@@ -43,6 +48,14 @@ def build_report(
         "niepewnosc": niepewnosc,
         "pomiar": pomiar,
     }
+    if exif is not None:
+        report["exif"] = exif
+    if kadr is not None:
+        report["kadr"] = kadr
+    if warianty is not None:
+        report["warianty"] = warianty
+    if audio is not None:
+        report["audio"] = audio
     return round_floats(report)
 
 

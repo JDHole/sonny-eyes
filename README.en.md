@@ -243,6 +243,17 @@ python -m eyes stop --project demo            # kills the whole process tree, ff
 Other useful `batch` flags: `--limit N` (only the first N files, to test a
 batch), `--porcja "Day 1"` (a label recorded in `_postep.json`).
 
+### Photos and assets
+
+`batch --rodzaj foto` scans JPG/RAF/PNG/TIF/DNG/HEIC instead of video clips
+(default is still `--rodzaj video`, unchanged); a JPG+RAF pair for the same
+shot is measured once, from the JPG. `batch --rodzaj assets` mixes audio
+(wav/mp3/m4a/flac/aac), image and video in one batch, dispatched per file
+extension. A single file: `python -m eyes photo --project demo --files
+shot.jpg` or `eyes asset --project demo --files sound.wav`. The report has
+the same skeleton as a clip's (see `docs/report-fields.md`, "Photos and
+assets" section).
+
 ### Review page
 
 ```bash
@@ -294,7 +305,7 @@ while measuring - see `--lang` in the "Configuration" section).
 python tests/test_smoke.py
 ```
 
-The gate does not use pytest: files in `tests/` are run as plain scripts. `test_smoke.py` checks reports from the author's own footage, so on your machine start with `tests/test_config.py`, `tests/test_cli.py` and `tests/test_review_lang.py` (the third one exits cleanly with a skip, code 0, when the author's material is missing). `tests/test_mcp.py` without the author's footage checks only the tool list and `batch_status`, and skips the measurement part with a SKIP message.
+The gate does not use pytest: files in `tests/` are run as plain scripts. `test_smoke.py` checks reports from the author's own footage, so on your machine start with `tests/test_config.py`, `tests/test_cli.py` and `tests/test_review_lang.py` (the third one exits cleanly with a skip, code 0, when the author's material is missing). `tests/test_mcp.py` without the author's footage checks only the tool list and `batch_status`, and skips the measurement part with a SKIP message. `test_runner.py`, `test_photo.py` and `test_asset.py` do the same. To measure your own footage, copy `tests/material.example.json` to `tests/material.local.json` (it is in `.gitignore`) and put paths to your clip folder, photos and a WAV file there, or set `EYES_TEST_<KEY>` variables, e.g. `EYES_TEST_FUJI_FOLDER`.
 
 ## For AI agents
 

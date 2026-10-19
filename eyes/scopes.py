@@ -81,3 +81,62 @@ def render_scope(
             f"{last_stderr.decode('utf-8', errors='replace')}"
         )
     return out_path
+
+
+def render_scope_still(
+    input_path: str,
+    filter_name: str,
+    out_path: Path,
+    max_width: int = 1024,
+    max_kb: int = MAX_KB,
+) -> Path:
+    """Jak render_scope, ale dla NIERUCHOMEGO obrazu (foto/image, kontrakt
+    2026-09-12): bez -ss/-t (caly plik to jedna klatka), bez LUT. `format=
+    yuv420p` idzie ZAWSZE przed filtrem skopu (nie tylko dla vectorscope jak
+    w render_scope) - inaczej ffmpeg 8.0.1 nie dobiera formatow dla waveform/
+    parade/histogram na obrazach. `input_path` idzie przez `-i` (nie przez
+    filtrgraf), wiec dwukropek po literze dysku Windows nie psuje parsera
+    (patrz modul docstring i CLAUDE.md sesji foto/audio)."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def build(width: int) -> str:
+        return f"scale={width}:-2,format=yuv420p,{filter_name}"
+
+    last_stderr = b""
+    for width in (max_width, 640):
+        vf = build(width)
+        cmd = [
+            FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
+            "-i", str(input_path), "-vf", vf, "-frames:v", "1", str(out_path),
+        ]
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode == 0 and out_path.exists() and out_path.stat().st_size <= max_kb * 1024:
+            return out_path
+        last_stderr = result.stderr
+
+    if not out_path.exists():
+        raise RuntimeError(
+            f"ffmpeg nie wygenerowal skopu foto {filter_name} dla {input_path}: "
+            f"{last_stderr.decode('utf-8', errors='replace')}"
+        )
+    return out_path
+
+
+def render_wave(input_path: str, out_path: Path, size: str = "1600x400", color: str = "9fd39f") -> Path:
+    """Fala audio (showwavespic) - jedna klatka PNG w rozmiarze `size`
+    ("SxW", np. "1600x400" na fale, "640x160" na kafel). Kolor domyslny
+    dopasowany do --wave w CSS strony przegladu (eyes/cmd_review.py)."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
+        "-i", str(input_path),
+        "-filter_complex", f"showwavespic=s={size}:colors=0x{color}",
+        "-frames:v", "1", str(out_path),
+    ]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode != 0 or not out_path.exists():
+        raise RuntimeError(
+            f"ffmpeg nie wygenerowal fali audio dla {input_path}: "
+            f"{result.stderr.decode('utf-8', errors='replace')}"
+        )
+    return out_path

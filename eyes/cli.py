@@ -21,7 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 import eyes  # noqa: E402
-from eyes import cmd_batch, cmd_dupes, cmd_measure, cmd_profile, cmd_review, runner  # noqa: E402
+from eyes import cmd_asset, cmd_batch, cmd_dupes, cmd_measure, cmd_photo, cmd_profile, cmd_review, runner  # noqa: E402
 from eyes.config import load_config, overrides_from_out  # noqa: E402
 
 
@@ -81,6 +81,12 @@ def measure(project, files_, extra_paths, out, config_path, lut, no_gpu, force, 
     "after the first, either as --folder a b or repeated --folder a --folder b.",
 )
 @click.argument("extra_folders", nargs=-1, type=click.UNPROCESSED, metavar="[FOLDER...]")
+@click.option(
+    "--rodzaj", type=click.Choice(["video", "foto", "assets"]), default="video", show_default=True,
+    help="What to scan: video (DSCF*.MOV / GX*,GH*,GOPR*.MP4, as before), "
+    "foto (JPG/RAF/PNG/TIF/DNG/HEIC, JPG+RAF pairs measured once), "
+    "assets (audio+image+video mixed, dispatched per file extension).",
+)
 @click.option("--porcja", default=None, help="Batch label recorded in _postep.json (default: first folder's name).")
 @click.option("--force", is_flag=True, default=False, help="Re-measure even if a report already exists.")
 @click.option("--no-gpu", is_flag=True, default=False, help="Force CPU decoding.")
@@ -90,13 +96,13 @@ def measure(project, files_, extra_paths, out, config_path, lut, no_gpu, force, 
 @click.option("--lut", default=None, help="Force this LUT on every clip, regardless of camera.")
 @click.option("--lang", type=click.Choice(["pl", "en"]), default=None, help="Language for the clip profile chart drawn during measurement. Default: from config/env, else en.")
 @click.option("--detach", is_flag=True, default=False, help="Run as a detached background process; prints {pid,...} JSON and returns immediately.")
-def batch(project, folder, extra_folders, porcja, force, no_gpu, limit, out, config_path, lut, lang, detach) -> None:
-    """Scan folder(s) recursively and measure every camera clip found."""
+def batch(project, folder, extra_folders, rodzaj, porcja, force, no_gpu, limit, out, config_path, lut, lang, detach) -> None:
+    """Scan folder(s) recursively and measure every camera clip (or photo/asset) found."""
     folder = tuple(folder) + tuple(extra_folders)
     # JEDNA flaga --folder z wszystkimi sciezkami: cmd_batch ma argparse nargs="+",
     # a powtorzona flaga (--folder a --folder b) nadpisuje poprzednia wartosc,
     # wiec przemial widzialby tylko ostatni folder.
-    argv = ["--project", project, "--folder", *folder]
+    argv = ["--project", project, "--folder", *folder, "--rodzaj", rodzaj]
     if porcja:
         argv += ["--porcja", porcja]
     if force:
@@ -117,6 +123,81 @@ def batch(project, folder, extra_folders, porcja, force, no_gpu, limit, out, con
         click.echo(f'batch --detach: proces dla projektu "{project}" juz dziala (patrz `eyes status`)', err=True)
         sys.exit(3)
     click.echo(__import__("json").dumps(info, ensure_ascii=False))
+
+
+@cli.command()
+@click.option("--project", required=True, help="Project name (groups reports/cache).")
+@click.option(
+    "--files", "files_", required=True, multiple=True, metavar="FILE...",
+    help="Photo/image path(s) to measure (JPG/RAF/PNG/TIF/DNG/HEIC). Additional paths can be "
+    "given after the first, either as --files a.jpg b.raf or repeated --files.",
+)
+@click.argument("extra_paths", nargs=-1, type=click.UNPROCESSED, metavar="[FILE...]")
+@click.option("--out", default=None, help="Output root override (out_root/cache_root/reports_root).")
+@click.option("--config", "config_path", default=None, help="Explicit path to config.toml.")
+@click.option("--force", is_flag=True, default=False, help="Re-measure even if a report already exists.")
+@click.option(
+    "--warianty-root", "warianty_root", multiple=True, metavar="FOLDER",
+    help="Folder(s) scanned recursively for variants (_IG/RAF/XMP) that live somewhere else than "
+    "the base file (e.g. retouched _IG copies kept in their own folder). `eyes batch --rodzaj foto` "
+    "passes its own folders here automatically.",
+)
+def photo(project, files_, extra_paths, out, config_path, force, warianty_root) -> None:
+    """Measure one or more photos/images and write a perception report per shot.
+
+    RAF files with a JPG of the same name alongside are measured from that JPG
+    (the RAF is only recorded in the report's warianty.raf); a RAF with no JPG
+    sibling is decoded from its embedded preview JPEG. HEIC/DNG have no
+    decoder in this repo and are skipped with a log entry, not an error.
+    """
+    files_ = tuple(files_) + tuple(extra_paths)
+    argv = ["--project", project, "--files", *files_]
+    if out:
+        argv += ["--out", out]
+    if config_path:
+        argv += ["--config", config_path]
+    if force:
+        argv.append("--force")
+    if warianty_root:
+        argv += ["--warianty-root", *warianty_root]
+    sys.exit(cmd_photo.main(argv))
+
+
+@cli.command()
+@click.option("--project", required=True, help="Project name.")
+@click.option(
+    "--files", "files_", required=True, multiple=True, metavar="FILE...",
+    help="Asset path(s) to measure - audio (wav/mp3/m4a/flac/aac), image (png/jpg/jpeg/webp; "
+    "svg is skipped, no decoder) or video (mp4/mov, measured exactly like `eyes measure`). "
+    "Additional paths can be given after the first, either as --files a b or repeated --files.",
+)
+@click.argument("extra_paths", nargs=-1, type=click.UNPROCESSED, metavar="[FILE...]")
+@click.option("--out", default=None, help="Output root override.")
+@click.option("--config", "config_path", default=None, help="Explicit path to config.toml.")
+@click.option("--lut", default=None, help="Force this LUT on any video file in the list.")
+@click.option("--no-gpu", is_flag=True, default=False, help="Force CPU decoding for any video file in the list.")
+@click.option("--force", is_flag=True, default=False, help="Re-measure even if a report already exists.")
+@click.option("--window-start", type=float, default=5.0, show_default=True, help="Measurement window start for any video file in the list.")
+@click.option("--window-len", type=float, default=20.0, show_default=True, help="Measurement window length for any video file in the list.")
+@click.option("--lang", type=click.Choice(["pl", "en"]), default=None, help="Language for a video file's profile chart. Default: from config/env, else en.")
+@click.option(
+    "--warianty-root", "warianty_root", multiple=True, metavar="FOLDER",
+    help="Folder(s) scanned recursively for image variants (_IG/RAF/XMP) kept outside the base "
+    "file's folder. `eyes batch --rodzaj assets` passes its own folders here automatically.",
+)
+def asset(project, files_, extra_paths, out, config_path, lut, no_gpu, force, window_start, window_len, lang, warianty_root) -> None:
+    """Measure one or more assets, dispatched per file to audio/image/video."""
+    files_ = tuple(files_) + tuple(extra_paths)
+    argv = ["--project", project, "--files", *files_]
+    argv += _out_config_lut_argv(out, config_path, lut, no_gpu)
+    if force:
+        argv.append("--force")
+    argv += ["--window-start", str(window_start), "--window-len", str(window_len)]
+    if lang:
+        argv += ["--lang", lang]
+    if warianty_root:
+        argv += ["--warianty-root", *warianty_root]
+    sys.exit(cmd_asset.main(argv))
 
 
 @cli.command()

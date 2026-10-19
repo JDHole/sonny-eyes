@@ -40,10 +40,10 @@ from mcp import types  # noqa: E402
 from mcp.client.session import ClientSession  # noqa: E402
 from mcp.client.stdio import StdioServerParameters, stdio_client  # noqa: E402
 
-# Realny klip Fuji Kuby, ten sam folder co tests/test_runner.py:FOLDER_2_3_KLIPOW.
-FUJI_FOLDER = Path(
-    r"C:\Users\jdziu\JDHole Production\VIdeo\Vlog\#39-42 Canarian Tweety Series\Dzień 7\100_FUJI"
-)
+# Realny folder klipow Fuji (material FUJI_FOLDER), ten sam co w tests/test_runner.py.
+from _material import material, skip_reason  # noqa: E402
+
+FUJI_FOLDER = material("FUJI_FOLDER")
 
 EXPECTED_TOOLS = {
     "probe_clip", "measure_clip", "get_report", "list_reports",
@@ -105,8 +105,9 @@ async def run() -> None:
                 check(names == EXPECTED_TOOLS, f"list_tools: {sorted(names)} != {sorted(EXPECTED_TOOLS)}")
 
                 # --- probe_clip na realnym klipie Fuji ---
-                if not FUJI_FOLDER.is_dir():
-                    print(f"SKIP: folder z materialem autora nie istnieje, pomijam probe/measure/list/get/review: {FUJI_FOLDER}")
+                powod = skip_reason("FUJI_FOLDER", FUJI_FOLDER)
+                if powod or not FUJI_FOLDER.is_dir():
+                    print(f"{powod or 'SKIP: FUJI_FOLDER to nie folder'}, pomijam probe/measure/list/get/review")
                 else:
                     clips = sorted(FUJI_FOLDER.glob("DSCF*.MOV"))
                     if not clips:

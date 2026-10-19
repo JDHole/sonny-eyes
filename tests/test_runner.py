@@ -8,8 +8,8 @@ Dwie czesci:
    --detach na tym samym projekcie odmawia (exit 3), stop ubija CALE
    drzewo (rodzic + dziecko), _postep.json sztuczny z "w toku" po stopie
    ma "przerwany", brak zywego procesu po stopie = stop nie jest bledem.
-2. Realny `python -m eyes batch --detach` na 2 klipach z folderu Kuby
-   (znaleziony przez tests/test_smoke.py: 100_FUJI z Dzien 7) - status co
+2. Realny `python -m eyes batch --detach` na 2 klipach z materialu
+   FUJI_FOLDER (tests/_material.py; brak = SKIP) - status co
    2 s do konca, sprawdza _postep.json "zakonczony" i _batch.log z UTF-8
    po polsku.
 
@@ -36,9 +36,9 @@ sys.path.insert(0, str(REPO_ROOT))
 from eyes import runner as runner_mod  # noqa: E402
 
 PY = sys.executable
-FOLDER_2_3_KLIPOW = (
-    r"C:\Users\jdziu\JDHole Production\VIdeo\Vlog\#39-42 Canarian Tweety Series\Dzień 7\100_FUJI"
-)
+from _material import material, skip_reason  # noqa: E402
+
+FOLDER_2_3_KLIPOW = material("FUJI_FOLDER")
 
 failures: list[str] = []
 
@@ -116,9 +116,10 @@ def czesc_1_sleep_i_stop(tmp: Path) -> None:
 def czesc_2_realny_batch(tmp: Path) -> None:
     project = "Canarian Tweety EP03"
     out = str(tmp / "batch_out")
-    folder = Path(FOLDER_2_3_KLIPOW)
-    if not folder.is_dir():
-        check(False, f"folder testowy nie istnieje, pomijam czesc 2: {folder}")
+    folder = FOLDER_2_3_KLIPOW
+    powod = skip_reason("FUJI_FOLDER", folder)
+    if powod:
+        print(f"{powod}, pomijam czesc 2")
         return
 
     r = run_eyes([

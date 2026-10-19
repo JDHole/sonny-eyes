@@ -237,6 +237,16 @@ python -m eyes stop --project demo            # ubija całe drzewo procesów, z 
 Inne przydatne flagi `batch`: `--limit N` (tylko pierwsze N plików, do testu
 porcji), `--porcja "Dzień 1"` (etykieta zapisywana w `_postep.json`).
 
+### Zdjęcia i assety
+
+`batch --rodzaj foto` skanuje JPG/RAF/PNG/TIF/DNG/HEIC zamiast klipów wideo
+(domyślnie `--rodzaj video`, jak dotąd); JPG+RAF tego samego ujęcia mierzone
+są raz, z JPG. `batch --rodzaj assets` miesza audio (wav/mp3/m4a/flac/aac),
+obraz i wideo w jednym przemiale, po rozszerzeniu pliku. Pojedynczy plik:
+`python -m eyes photo --project demo --files zdjecie.jpg` albo
+`eyes asset --project demo --files dzwiek.wav`. Raport ma ten sam szkielet co
+klip (patrz `docs/report-fields.md`, sekcja "Zdjęcia i assety").
+
 ### Strona przeglądu
 
 ```bash
@@ -288,7 +298,7 @@ patrz `--lang` w sekcji "Konfiguracja").
 python tests/test_smoke.py
 ```
 
-Bramka bez pytest: pliki w `tests/` uruchamia się jako zwykłe skrypty. `test_smoke.py` sprawdza raporty z materiału autora, więc u siebie zacznij od `tests/test_config.py`, `tests/test_cli.py` i `tests/test_review_lang.py` (ten trzeci bez materiału autora kończy się czystym pominięciem, kodem 0). `tests/test_mcp.py` bez materiału autora sprawdza tylko listę narzędzi i `batch_status`, a część pomiarową pomija z komunikatem SKIP.
+Bramka bez pytest: pliki w `tests/` uruchamia się jako zwykłe skrypty. `test_smoke.py` sprawdza raporty z materiału autora, więc u siebie zacznij od `tests/test_config.py`, `tests/test_cli.py` i `tests/test_review_lang.py` (ten trzeci bez materiału autora kończy się czystym pominięciem, kodem 0). `tests/test_mcp.py` bez materiału autora sprawdza tylko listę narzędzi i `batch_status`, a część pomiarową pomija z komunikatem SKIP. To samo robią `test_runner.py`, `test_photo.py` i `test_asset.py`. Żeby zmierzyć własny materiał, skopiuj `tests/material.example.json` do `tests/material.local.json` (jest w `.gitignore`) i wpisz ścieżki do swojego klipu, zdjęć i pliku WAV, albo ustaw zmienne `EYES_TEST_<KLUCZ>`, np. `EYES_TEST_FUJI_FOLDER`.
 
 ## Dla agentów AI
 

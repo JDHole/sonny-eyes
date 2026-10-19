@@ -310,3 +310,165 @@ Explicit statement of what could compromise this particular measurement.
 | `pomiar.ffmpeg` | string | ffmpeg version string, as reported by `ffmpeg -version`. | `"unknown"` when the call failed. |
 | `pomiar.opencv` | string | OpenCV version used. | |
 | `pomiar.host` | string | Machine label. | `platform.node()` - the OS-reported hostname of the machine that ran the measurement, not a fixed value. |
+
+## Photos and assets
+
+`python -m eyes photo` (photos/images) and `python -m eyes asset` (audio,
+plus image and video dispatched per file) write the SAME top-level schema as
+a clip - same keys, same order - so downstream code does not need a branch
+per kind. The difference is `zrodlo.rodzaj` plus a few sections that are
+either reshaped to a minimal placeholder or replaced with kind-specific data.
+Everything not listed here (`werdykty`, `montaz.segmenty`, rounding, etc.)
+behaves exactly as documented above. This part of the schema was added
+2026-09-12 (still metrics version `"0.2"`).
+
+### `zrodlo` additions
+
+| field | type | meaning | notes |
+|---|---|---|---|
+| `zrodlo.rodzaj` | string | `"video"` \| `"photo"` \| `"image"` \| `"audio"`. | Absent (not `null` - the key itself is missing) on a clip report written by `eyes measure`/`eyes batch` with no `--rodzaj`, which means "video". `"photo"` is a `batch --rodzaj foto` or `eyes photo` shot; `"image"` is the same code path used for a plain image inside `batch --rodzaj assets` (EXIF is optional there, not required). |
+| `zrodlo.plik_pomiaru` | string | Path of the file actually decoded. | Equals `zrodlo.plik`'s resolved path for a JPG/PNG/audio file. For a RAF with a JPG of the same name in the same folder, it points at that JPG. For a RAF with no JPG sibling, it is the RAF's own resolved path with `#embedded` appended (the pixel data came from the JPEG preview embedded in the RAF header, not from an on-disk JPEG). |
+| `zrodlo.kamera` | string | For photo/image: EXIF `Model` when present (e.g. `"X-T4"`), else `"nieznana"`. For audio: always `"nieznana"`. | Not the `DSCF*.MOV`/`GX*.MP4` filename pattern used for video - a still image's filename does not carry that signal, EXIF does. |
+| `zrodlo.profil`, `zrodlo.lut_pomiarowy` | null | Always `null` for photo/image/audio. | LUTs are a video/log-footage concept and do not apply here. |
+| `zrodlo.czas_s` | number or null | `null` for photo/image; clip duration in seconds (from ffprobe) for audio. | |
+
+### `stream`, `okno_pomiaru`, `ruch`, `plynnosc`, `montaz` for non-video
+
+| field | photo/image | audio |
+|---|---|---|
+| `stream` | `codec` (e.g. `"jpeg"`), `w`, `h`, `pix_fmt` (e.g. `"rgb"`) filled in; `fps`, `fps_avg`, `range`, `transfer`, `primaries`, `nb_frames` all `null`. | `codec`, `sample_rate`, `channels`, `bits` filled in (from ffprobe; `bits` is `null` when the container does not declare it); everything else (including `w`/`h`/`pix_fmt`) `null`. |
+| `okno_pomiaru` | `{"tryb": "still"}` - nothing else. | `{"tryb": "audio"}` - nothing else. |
+| `ruch` | `{"klasa": [], "metoda": null}`. | Same. |
+| `plynnosc` | `{}` (empty object). | Same. |
+| `montaz` | `{"segmenty": []}` (no `dlugosc_s`). | Same. |
+
+### `tonalnosc`, `kolor`, `ostrosc`, `szum` for photo/image
+
+Computed with the exact same functions as video (`compute_tonalnosc` /
+`compute_kolor` / `compute_ostrosc` / `compute_szum`), on a SINGLE frame: the
+decoded image (EXIF orientation already applied via `ImageOps.exif_transpose`)
+downscaled so its longer side is 960 px (never upscaled - a smaller source
+keeps its native size). For audio all four are `null`.
+
+| field | type | meaning | notes |
+|---|---|---|---|
+| `ostrosc.skala_pomiaru_px` | integer | `960` for photo/image. | `compute_ostrosc` itself always writes `480` (the video constant) - the photo/image code overwrites it with `960` afterward, since the working frame here is 960 px, not 480. Do not compare `ostrosc.lapvar` between a video report and a photo report - different scale. |
+| `ostrosc.fokus_komorka` | integer, 0-8 | Index into `ostrosc.siatka_3x3` of the cell with the highest Laplacian variance, row-major from the top-left. | Not present on video reports. A center cell (index 4) several times above the others suggests a shallow-DOF subject centered in frame. |
+| `tonalnosc.histogram_64` | array of 64 numbers | Luma (BT.709, same 0-1 scale as the rest of `tonalnosc`) histogram of the 960 px working frame, 64 equal-width bins over `[0, 1)`, normalized so the bins sum to 1. | Not present on video reports. Sums to `1.0` before the report's global 3-decimal rounding (`eyes/report.py:round_floats`); after rounding, expect the sum to land within a few thousandths of `1.0`, not exactly `1.0`. |
+
+### `exif` - only photo/image
+
+Read via Pillow `im.getexif()` (IFD0 tags) plus the Exif sub-IFD at tag
+`0x8769` (`exif.get_ifd(0x8769)`) for everything camera-specific. An image
+with no EXIF (a plain PNG, a screenshot) gets every field `null` - that is
+not an error.
+
+| field | type | meaning | notes |
+|---|---|---|---|
+| `exif.aparat` | string or null | Camera model (`Model`, tag `0x0110`). | |
+| `exif.obiektyw` | string or null | Lens model (`LensModel`, tag `0xA434`). | |
+| `exif.ogniskowa_mm` | number or null | Focal length in mm (`FocalLength`, tag `0x920A`). | |
+| `exif.ogniskowa_35mm` | integer or null | 35 mm-equivalent focal length (`FocalLengthIn35mmFilm`, tag `0xA405`). | |
+| `exif.przyslona` | number or null | Aperture, f-number (`FNumber`, tag `0x829D`). | |
+| `exif.czas_naswietlania` | string or null | Human-readable shutter speed, e.g. `"1/400"` for sub-second, `"2s"` for one second or longer. | Derived from `czas_naswietlania_s`; the fraction is rounded to the nearest whole denominator. |
+| `exif.czas_naswietlania_s` | number or null | Shutter speed in seconds (`ExposureTime`, tag `0x829A`). | |
+| `exif.iso` | integer or null | ISO speed (`ISOSpeedRatings`, tag `0x8827`). | Feeds the `iso_wysokie` flag. |
+| `exif.ev` | number or null | Exposure compensation (`ExposureBiasValue`, tag `0x9204`). | Can be negative. |
+| `exif.wb` | string or null | White balance (`WhiteBalance`, tag `0xA403`): `"auto"` (tag value `0`) or `"reczny"` (tag value `1`, "manual"). | `null` for any other/absent tag value, not just a missing tag. |
+| `exif.data` | string or null | Capture timestamp (`DateTimeOriginal`, tag `0x9003`), reformatted from EXIF's `"YYYY:MM:DD HH:MM:SS"` to `"YYYY-MM-DD HH:MM:SS"`. | |
+| `exif.orientacja` | integer or null | Raw EXIF `Orientation` tag value (`0x0112`), 1-8, as it was BEFORE the pixel data was rotated/flipped to match it. | `kadr.w`/`kadr.h`/`kadr.orientacja` describe the image AFTER this orientation was applied to the pixels - they are consistent with what you see, not with this raw tag. |
+
+### `kadr` - only photo/image
+
+| field | type | meaning | notes |
+|---|---|---|---|
+| `kadr.w`, `kadr.h` | integer | Pixel dimensions after EXIF orientation is applied. | For a RAF measured from its embedded preview, these are the preview's dimensions (smaller than the sensor's raw output - e.g. 4416x2944 embedded vs. a larger true raw size on a Fujifilm X-T4). |
+| `kadr.mpx` | number | Megapixels, `w * h / 1e6`, rounded to 1 decimal place. | Rounded to 1 decimal BEFORE the report's global 3-decimal rounding pass, so it always reads as one decimal digit (`26.0`, not `26.001`). |
+| `kadr.proporcje` | string | Aspect ratio as a reduced fraction `"w:h"` (via `gcd`), e.g. `"3:2"`, `"2:3"`, `"16:9"`, `"1:1"`. | Not normalized to landscape - a portrait 3:2 shot reads `"2:3"`, not `"3:2"`. |
+| `kadr.orientacja` | string | `"poziom"` (landscape, `w > h`), `"pion"` (portrait, `h > w`) or `"kwadrat"` (square). | |
+| `kadr.entropia` | number | Shannon entropy of the 960 px working frame's luma, 8-bit histogram (256 bins), range 0-8. | Computed on the same downscaled frame as `tonalnosc`/`ostrosc`, not on the full-resolution image. |
+
+### `warianty` - only photo/image
+
+Describes files with the same stem that belong to the same shot - independent
+of which one was actually decoded (`zrodlo.plik_pomiaru`).
+
+Lookup order: first a sibling in the measured file's own folder, then - when
+the measurement was started by `batch --rodzaj foto|assets`, or by
+`photo`/`asset` with `--warianty-root FOLDER...` - anywhere under those
+folders (scanned recursively once per run). Retouched `_IG` exports are
+typically kept in their own folder rather than next to the camera JPG, so
+without those roots `warianty.ig` stays `null`.
+
+| field | type | meaning | notes |
+|---|---|---|---|
+| `warianty.jpg` | boolean | A `.jpg`/`.jpeg` with the same stem exists (sibling first, then the scanned roots). | `true` even when the JPG itself is the measured file. |
+| `warianty.raf` | boolean | A `.raf` with the same stem exists (sibling first, then the scanned roots). | |
+| `warianty.ig` | object or null | The `{stem}_IG.jpg`/`.jpeg` export, if present - usually found in a separate retouch folder via the scanned roots. | `{"plik", "w", "h", "proporcje", "rozmiar_b", "crop"}` - `crop` is `true` when the IG export's aspect ratio differs from `kadr.proporcje` (i.e. it was cropped for a platform, not just re-exported at the same framing). |
+| `warianty.xmp` | object or null | The `{stem}.xmp` sidecar, if present. | `{"plik", "crs": {...}}` - `crs` is every `crs:*` setting found in the XMP, written either as an attribute (`crs:Exposure2012="+0.50"`, what Lightroom emits) or as a simple element (`<crs:Exposure2012>+0.50</crs:Exposure2012>`); nested lists such as `crs:ToneCurvePV2012` are skipped (Lightroom/ACR develop settings: exposure, tone curve sliders, crop, noise reduction, the active "Look" under the key `"Look"`, etc.), as floats where the value parses as a number, otherwise as the raw string (e.g. `crs:WhiteBalance="Custom"` stays the string `"Custom"`). This is every `crs:*` attribute present in the file, not a fixed subset - an XMP with more Lightroom sliders touched produces more keys. |
+
+### `audio` - only audio
+
+All values from ffmpeg/ffprobe on the file as a whole (no windowing, unlike
+video's two-sample scheme).
+
+| field | type | meaning | notes |
+|---|---|---|---|
+| `audio.czas_s` | number | Duration in seconds (ffprobe). | Same value as `zrodlo.czas_s` and `stream.czas_s`. |
+| `audio.sample_rate` | integer or null | Sample rate in Hz. | |
+| `audio.channels` | integer or null | Channel count. | |
+| `audio.lufs_i` | number or null | Integrated loudness in LUFS (`ffmpeg -af ebur128=peak=true`, the "Integrated loudness / I:" line of the Summary block). | `null` if ffmpeg's ebur128 filter produced no Summary (e.g. a file too short to measure). |
+| `audio.lra` | number or null | Loudness range in LU (ebur128 Summary "LRA:"). | |
+| `audio.true_peak_dbtp` | number or null | True peak in dBTP (ebur128 Summary "Peak:", `peak=true` mode). | Feeds `glosno` and `klip`. |
+| `audio.cisza_start_s` | number | Length in seconds of a silent run touching the very start of the file (`ffmpeg -af silencedetect=n=-50dB:d=0.3`), else `0`. | Not `null` when absent - `0` means "does not start in silence". |
+| `audio.cisza_koniec_s` | number | Same as above, for a silent run touching the very end of the file. | |
+| `audio.szczyt_rms_db` | number or null | Crest factor in dB: astats `Peak level dB` minus `RMS level dB`, from the `Overall` block of `ffmpeg -af astats`. | A high value means a spiky/dynamic signal relative to its average level; a value near 0 means the signal sits close to its own peak most of the time (heavily limited/compressed). |
+
+### `klatki` and `skopy` for photo/image and audio
+
+Entries here carry only `{"rola"/"typ", "plik"}` - no `t_s` timestamp (a
+still image or a whole audio file has no single relevant instant).
+
+| kind | `klatki` | `skopy` |
+|---|---|---|
+| photo/image | `pierwsza` and `najostrzejsza` both point at the same `{id}_podglad.jpg` (JPEG, longer side 1920 px, never upscaled); `kafel` points at `{id}_kafel.jpg` (longer side 640 px). | Four entries - `waveform`, `parade` (RGB parade, `waveform=mode=column:components=7`), `vectorscope`, `histogram` (`histogram=display_mode=stack`) - all rendered from the 1024 px `podglad`, files at `scopes/{id}_{typ}.png`. |
+| audio | `pierwsza` and `najostrzejsza` both point at `{id}_fala.png` (`showwavespic`, 1600x400); `kafel` points at `{id}_kafel.png` (showwavespic, 640x160). | `[]` - no scopes for audio. |
+
+### `flagi_prowizoryczne` and `progi_prowizoryczne` for photo/image
+
+Separate threshold table (`eyes/cmd_photo.py:PROGI_FOTO`), not
+`PROGI_PROWIZORYCZNE`. `clip_hi_pct_max`, `p5_czern_mleczna_max`,
+`p1_czern_zabita_max` and `clip_lo_pct_czern_zabita_min` reuse the exact
+video default values and flag logic (`clip_hi>1%`, `czern_mleczna`,
+`czern_zabita`). Two extra flags exist only here:
+
+| value | condition | notes |
+|---|---|---|
+| `nieostre` | `ostrosc.lapvar < lapvar_nieostre_max` (default `184.6`, at the 960 px scale). | Calibrated 2026-09-12 on the first 20 JPGs (by filename) of a single shooting-day folder: the lowest/highest `lapvar` extremes were visually checked and turned out to be low-texture/backlit content rather than genuinely out-of-focus shots (the same content-dependence caveat as video's `ostrosc.lapvar`, see above) - so the threshold falls back to the contract's rule for that case, one third of the sample median (median `553.9` -> `184.6`). Treat it as provisional, same spirit as `PROGI_PROWIZORYCZNE`. |
+| `iso_wysokie` | `exif.iso > iso_wysokie_min` (default `3200`). | `false`/absent whenever `exif.iso` is `null` (no EXIF). |
+| `szum` | `szum.sigma > sigma_szum_max` (default `0.02`). | This default was NOT calibrated against real photos (unlike `lapvar_nieostre_max`) - it is a working placeholder, flagged here so it is not mistaken for a measured value. |
+
+### `flagi_prowizoryczne` and `progi_prowizoryczne` for audio
+
+Separate table (`eyes/cmd_asset.py:PROGI_AUDIO`), taken directly from the
+session contract, not independently calibrated.
+
+| value | condition |
+|---|---|
+| `cicho` | `audio.lufs_i < cicho_lufs_max` (`-30.0`). |
+| `glosno` | `audio.true_peak_dbtp > glosno_dbtp_min` (`-1.0`). |
+| `klip` | `audio.true_peak_dbtp > klip_dbtp_min` (`0.0`). |
+| `cisza_start` | `audio.cisza_start_s > cisza_start_s_min` (`1.0`). |
+| `cisza_koniec` | `audio.cisza_koniec_s > cisza_koniec_s_min` (`2.0`). |
+
+`glosno` and `klip` are independent checks, not mutually exclusive - a
+clipped file (`klip`) is also over the `glosno` threshold and gets both flags.
+
+### Formats with no decoder
+
+HEIC and DNG (photo/image) have no decoder in this repo (Pillow has no
+RAW/HEIF plugin installed, and `pip install` is off the table) - a file with
+either extension is skipped with a log entry (`status: "pominieto"`,
+`"powod": "brak_dekodera"` in `_log.jsonl`), not treated as an error and not
+allowed to fail the rest of a batch. SVG is skipped the same way inside
+`batch --rodzaj assets`, for the same reason (no rasterizer available).

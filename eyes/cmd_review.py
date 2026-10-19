@@ -95,7 +95,10 @@ def main(argv=None) -> int:
     flag_counts: dict[str, int] = {}
     for r in reports:
         i = r["id"]
-        z, t, o, m, k = r["zrodlo"], r["tonalnosc"], r["ostrosc"], r["ruch"], r.get("kolor", {})
+        # raport audio (kontrakt foto/audio 0.2) ma tonalnosc/kolor/ostrosc = null,
+        # a nie brak klucza - samo .get(klucz, {}) zwrocilo by None i strona sie sypala
+        z, m = r["zrodlo"], r["ruch"] or {}
+        t, o, k = r["tonalnosc"] or {}, r["ostrosc"] or {}, r.get("kolor") or {}
         cam = z.get("kamera", "?")
         n_fuji += cam == "Fuji"
         n_gopro += cam == "GoPro"
