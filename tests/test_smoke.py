@@ -6,6 +6,11 @@ Sprawdza raporty DSCF3236 (Fuji) i GX010042 (GoPro) w projekcie
 "Canarian Tweety EP03": komplet kluczy najwyzszego poziomu, zakresy 0..1 i
 monotonicznosc percentyli tonalnosci, obecnosc i rozmiar 4 PNG, oraz
 zgodnosc kamera/LUT z oczekiwaniem.
+
+Material tego testu to gotowe raporty w reports_root z config.toml obok
+repo. Brak raportu = SKIP tego przypadku (komunikat na wyjsciu), nie FAIL;
+gdy nie ma zadnego, caly test konczy sie "SMOKE TEST: SKIP" z kodem 0 -
+tak jak testy z tests/_material.py. FAIL zostaje dla zlej TRESCI raportu.
 """
 from __future__ import annotations
 
@@ -37,6 +42,7 @@ TOP_KEYS = [
 MAX_PNG_BYTES = 500 * 1024
 
 failures: list[str] = []
+skipped: list[str] = []
 
 
 def check(cond: bool, msg: str) -> None:
@@ -48,13 +54,15 @@ def main() -> int:
     cfg = load_config(REPO_ROOT / "config.toml")
     report_dir = cfg.reports_dir(PROJECT)
     cache_root = Path(cfg.cache_root)
+    checked = 0
 
     for case in CASES:
         id_ = case["id"]
         report_path = report_dir / f"{id_}.json"
-        check(report_path.exists(), f"{id_}: brak raportu {report_path}")
         if not report_path.exists():
+            skipped.append(f"{id_}: brak raportu {report_path}")
             continue
+        checked += 1
 
         data = json.loads(report_path.read_text(encoding="utf-8"))
 
@@ -139,8 +147,9 @@ def main() -> int:
     for ruch_id in ("DSCF1414", "DSCF3066", "DSCF2988"):
         rp = report_dir / f"{ruch_id}.json"
         if not rp.exists():
-            check(False, f"kalibracja ruchu: brak raportu {ruch_id} (odpal measure.py --force na tym klipie)")
+            skipped.append(f"kalibracja ruchu: brak raportu {ruch_id} (odpal measure --force na tym klipie)")
             continue
+        checked += 1
         dane = json.loads(rp.read_text(encoding="utf-8"))
         reports_ruch[ruch_id] = dane
         ruch_cases[ruch_id] = dane.get("ruch", {})
@@ -208,12 +217,17 @@ def main() -> int:
             f"DSCF2988: jitter_rms_pct={jitter_2988}, oczekiwano < 0.05 (statyw)",
         )
 
+    for sk in skipped:
+        print("SKIP: " + sk)
     if failures:
         print(f"SMOKE TEST: FAIL ({len(failures)} problemow)")
         for f in failures:
             print(" - " + f)
         return 1
 
+    if checked == 0:
+        print("SMOKE TEST: SKIP (brak raportow w reports_root - nic do sprawdzenia)")
+        return 0
     print("SMOKE TEST: PASS")
     return 0
 
