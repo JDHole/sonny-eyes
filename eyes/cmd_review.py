@@ -46,6 +46,19 @@ def data_uri(path: Path, width: int | None = None, jpeg_q: int | None = None) ->
     return f"data:{MIME.get(path.suffix.lower(), 'application/octet-stream')};base64," + base64.b64encode(b).decode("ascii")
 
 
+def sciezka_cegly(r: dict, cache_root: Path, project_cache: Path) -> Path:
+    """Obrazek karty z raportu: klatka o roli "najostrzejsza" z r["klatki"]
+    (sciezka wzgledem cache_root). Wideo ma tam {id}_najostrzejsza.png,
+    zdjecie {id}_podglad.jpg (cmd_photo), audio {id}_fala.png (cmd_asset) -
+    dlatego nazwy nie da sie zgadnac z samego id. Raport bez tej roli (starszy
+    ksztalt) dostaje dawna sciezke wideo."""
+    for fr in r.get("klatki") or []:
+        if fr.get("rola") == "najostrzejsza" and fr.get("plik"):
+            return cache_root / fr["plik"]
+    i = r["id"]
+    return project_cache / i / "frames" / f"{i}_najostrzejsza.png"
+
+
 def load_json(path: Path, default):
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
@@ -108,12 +121,13 @@ def main(argv=None) -> int:
         pr = probka.get(i, {})
         wk = werdykty.get(i)
         n_kuba += 1 if wk else 0
+        cegla_path = sciezka_cegly(r, cache_root, project_cache)
         if args.compact:
-            cegla = data_uri(project_cache / i / "frames" / f"{i}_najostrzejsza.png", width=320, jpeg_q=75)
+            cegla = data_uri(cegla_path, width=320, jpeg_q=75)
             wave = ""
             ruch_png = data_uri(project_cache / i / "scopes" / f"{i}_przebieg.png", width=480, jpeg_q=80)
         else:
-            cegla = data_uri(project_cache / i / "frames" / f"{i}_najostrzejsza.png")
+            cegla = data_uri(cegla_path)
             wave = data_uri(project_cache / i / "scopes" / f"{i}_waveform.png")
             ruch_png = data_uri(project_cache / i / "scopes" / f"{i}_przebieg.png")
         klasa = "+".join(m.get("klasa", []) or [])
