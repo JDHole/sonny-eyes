@@ -237,6 +237,18 @@ def plan_probkowania_ruchu(duration_s: float) -> tuple[float, float, float | Non
     return float(fps_b), float(duration_s), None
 
 
+def okno_sredniej_ruchu(fps_b: float) -> int:
+    """Okno sredniej ruchomej w compute_ruch: pol sekundy probek B."""
+    return max(1, round(0.5 * fps_b))
+
+
+def min_klatek_ruchu(fps_b: float) -> int:
+    """Najmniej klatek probki B, przy ktorych compute_ruch ma sens: par
+    klatek co najmniej tyle, ile okno sredniej (np.convolve mode="same" przy
+    krotszej serii zwraca wynik dlugosci okna i odejmowanie sie sypie)."""
+    return okno_sredniej_ruchu(fps_b) + 1
+
+
 def _moving_average(x: np.ndarray, window: int) -> np.ndarray:
     """Ruchoma srednia z oknem `window` probek. NaN (pary niepewne/brakujace)
     sa pomijane w liczniku i mianowniku; pozycja bez zadnej wartosci w oknie
@@ -332,7 +344,7 @@ def compute_ruch(frames_gray_b: np.ndarray, fps_b: float, target_width: int) -> 
             pary_niepewne += 1
 
     mags_px = np.hypot(dx_px, dy_px)  # NaN gdzie para niepewna
-    window = max(1, round(0.5 * fps_b))
+    window = okno_sredniej_ruchu(fps_b)
     ma_px = _moving_average(mags_px, window)
     residual_px = mags_px - ma_px
 

@@ -148,6 +148,16 @@ def process_file(path: Path, *, args, cfg, hash_by_path: dict, file_paths: list[
     frames_a = dec_a["frames"]
     frames_rgb_b = dec_b["frames"]
 
+    # Klip za krotki na pomiar (typowo przypadkowe nagranie GoPro 0,2-0,3 s):
+    # okno A nie daje ani jednej klatki albo ruch nie ma pelnego okna sredniej
+    # ruchomej. Bez tej bramki metryki padaly surowym bledem numpy; teraz to
+    # pominiecie z powodem, jak .svg bez dekodera (decyzja Kuby 2026-10-20).
+    n_a, n_b = len(frames_a), frames_rgb_b.shape[0]
+    min_b = metrics_mod.min_klatek_ruchu(fps_b)
+    if n_a == 0 or n_b < min_b:
+        print(f"{id_}: pominieto, klip za krotki na pomiar ({duration:.2f} s; klatek okna {n_a}, ruchu {n_b} z wymaganych {min_b})")
+        return {"id": id_, "plik": path.name, "status": "pominieto", "powod": "za_krotki", "czas_calkowity_s": None, "raport": None}
+
     tonalnosc = metrics_mod.compute_tonalnosc(frames_a)
     kolor = metrics_mod.compute_kolor(frames_a)
     ostrosc, idx_sharp = metrics_mod.compute_ostrosc(frames_a)
@@ -314,14 +324,17 @@ def main(argv=None, on_progress=None) -> int:
             continue
         try:
             result = process_file(path, args=args, cfg=cfg, hash_by_path=hash_by_path, file_paths=unique_paths, lut_override=args.lut)
-            _log_i_postep({
+            entry = {
                 "id": result["id"],
                 "plik": result["plik"],
                 "status": result["status"],
                 "czas_calkowity_s": result["czas_calkowity_s"],
                 "data": datetime.datetime.now().astimezone().isoformat(),
                 "wersja_metryk": "0.2",
-            }, idx)
+            }
+            if result.get("powod"):
+                entry["powod"] = result["powod"]
+            _log_i_postep(entry, idx)
         except Exception as e:  # noqa: BLE001
             any_failed = True
             print(f"{path.name}: BLAD {e}", file=sys.stderr)

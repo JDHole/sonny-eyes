@@ -166,6 +166,7 @@ def measure_clip(
 
     cached = report_path.exists() and not force
     if not cached:
+        przed = report_path.stat().st_mtime_ns if report_path.exists() else None  # patrz _measure_one
         argv = ["--project", project, "--files", str(p)]
         if force:
             argv.append("--force")
@@ -173,11 +174,14 @@ def measure_clip(
             argv += ["--lut", lut]
         with _quiet_stdout():
             rc = cmd_measure.main(argv)
-        if rc != 0 or not report_path.exists():
+        if rc != 0:
             raise ToolError(
                 f"measurement failed for {path} (exit={rc}; see _log.jsonl under "
                 f"{cache_root / project} for the error entry)"
             )
+        if not report_path.exists() or report_path.stat().st_mtime_ns == przed:
+            # rc=0 bez nowego raportu = klip pominiety (np. za krotki na pomiar, ponizej ~0,6 s)
+            raise ToolError(f"no report written for {path}: skipped, clip too short to measure")
 
     report = json.loads(report_path.read_text(encoding="utf-8"))
     if compact:

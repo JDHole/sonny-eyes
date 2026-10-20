@@ -209,6 +209,7 @@ Kilka plików naraz: `--files a.MOV b.MP4` (albo z powtórzoną flagą:
 `--files a.MOV --files b.MP4`); tak samo działa `--folder` w `batch`. Domyślnie klip, który ma już raport, jest
 pomijany - `--force` wymusza ponowny pomiar. Okno pomiarowe zmieniają
 `--window-start` i `--window-len`.
+Klip krótszy niż około 0,6 s (przypadkowe nagranie) jest pomijany bez raportu, a w `_log.jsonl` dostaje `powod: "za_krotki"`; to nie jest błąd przemiału.
 
 ### Przemiał folderu
 

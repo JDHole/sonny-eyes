@@ -214,6 +214,7 @@ For several files: `--files a.MOV b.MP4` (or with the flag repeated:
 `--files a.MOV --files b.MP4`); `--folder` in `batch` works the same way. By default a clip that already has a report is
 skipped - `--force` re-measures it. The measurement window is set by
 `--window-start` and `--window-len`.
+A clip shorter than about 0.6 s (an accidental recording) is skipped with no report and gets `powod: "za_krotki"` in `_log.jsonl`; that is not a batch error.
 
 ### Batch a folder
 
