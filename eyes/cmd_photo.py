@@ -23,6 +23,7 @@ import argparse
 import datetime
 import io
 import math
+import os
 import platform
 import re
 import struct
@@ -255,7 +256,13 @@ def _find_variant(folder: Path, stem: str, exts: tuple[str, ...], index=None) ->
     bez wzgledu na wielkosc liter dzieki NTFS, wiec jeden Path.exists() na
     wariant wystarcza), a dopiero potem - gdy podano indeks przemialu
     (zbuduj_indeks_wariantow) - w calym drzewie folderow batcha. Kolejnosc jest
-    wazna: lokalny wariant wygrywa z jakimkolwiek innym o tym samym stemie."""
+    wazna: lokalny wariant wygrywa z jakimkolwiek innym o tym samym stemie.
+
+    Kilku kandydatow w indeksie (ta sama nazwa w roznych dniach, np. licznik
+    aparatu przekrecony): wygrywa NAJBLIZSZY w drzewie folderow (regula A,
+    decyzja Kuby 2026-10-20) - najmniej krokow w gore i w dol od folderu pliku
+    bazowego. Dzien/Obrobione/DSCF0047.jpg dostaje wiec RAF z Dzien/, a nie
+    z innego dnia. Remis odleglosci rozstrzyga kolejnosc sciezek (jak dotad)."""
     for ext in exts:
         p = folder / f"{stem}.{ext}"
         if p.exists():
@@ -264,8 +271,21 @@ def _find_variant(folder: Path, stem: str, exts: tuple[str, ...], index=None) ->
         for ext in exts:
             kandydaci = index.get((stem.lower(), ext))
             if kandydaci:
-                return kandydaci[0]
+                return min(kandydaci, key=lambda k: _odleglosc_folderow(folder, k.parent))
     return None
+
+
+def _odleglosc_folderow(a: Path, b: Path) -> int:
+    """Liczba krokow w drzewie miedzy folderami a i b (przez wspolnego
+    przodka); bez wzgledu na wielkosc liter, jak NTFS."""
+    pa = [s.lower() for s in Path(os.path.abspath(a)).parts]
+    pb = [s.lower() for s in Path(os.path.abspath(b)).parts]
+    wspolne = 0
+    for x, y in zip(pa, pb):
+        if x != y:
+            break
+        wspolne += 1
+    return (len(pa) - wspolne) + (len(pb) - wspolne)
 
 
 def _raf_embedded_jpeg_bytes(path: Path) -> bytes:

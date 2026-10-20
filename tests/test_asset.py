@@ -6,8 +6,9 @@ Mierzy 1 WAV (AUDIO_WAV z tests/_material.py, brak = SKIP) do
 TYMCZASOWEGO --out (NIE do prawdziwego cache/reports): komplet kluczy
 najwyzszego poziomu (w tym audio), audio.lufs_i liczba < 0, pliki fali/kafla
 > 0 B. Osobno (bez pomiaru, sama logika): dyspozytor rozszerzen
-eyes.cmd_asset._kind_for_ext i pomijanie wariantow _IG/_stock w
-eyes.cmd_batch.zbierz_assets, na pustych plikach.
+eyes.cmd_asset._kind_for_ext i pomijanie wariantow _IG/_stock/_export
+obrazow w eyes.cmd_batch.zbierz_assets (audio i wideo z taka koncowka sa
+mierzone), na pustych plikach.
 """
 from __future__ import annotations
 
@@ -63,11 +64,18 @@ def test_dyspozytor() -> None:
 def test_zbierz_assets_pomija_warianty(tmp_root: Path) -> None:
     folder = tmp_root / "assets_logic"
     folder.mkdir(parents=True, exist_ok=True)
-    nazwy = ["a.wav", "b.png", "b_IG.png", "c_stock.jpg", "d.svg", "e.mp4", "notatka.txt"]
+    nazwy = [
+        "a.wav", "b.png", "b_IG.png", "c_stock.jpg", "d.svg", "d_export.svg", "e.mp4", "notatka.txt",
+        # audio i wideo z koncowka to samodzielne pliki, nie kopie obrazu (Kuba 20.10)
+        "track_stock.wav", "muzyka_export.mp3", "clip_export.mp4", "ujecie_stock.MOV",
+    ]
     for n in nazwy:
         (folder / n).write_bytes(b"")
     wynik = sorted(p.name for p in cmd_batch.zbierz_assets([str(folder)]))
-    oczekiwane = sorted(["a.wav", "b.png", "d.svg", "e.mp4"])
+    oczekiwane = sorted([
+        "a.wav", "b.png", "d.svg", "e.mp4",
+        "track_stock.wav", "muzyka_export.mp3", "clip_export.mp4", "ujecie_stock.MOV",
+    ])
     check(wynik == oczekiwane, f"zbierz_assets: {wynik} != {oczekiwane}")
 
 

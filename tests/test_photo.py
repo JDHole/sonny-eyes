@@ -100,7 +100,11 @@ def zmierz_i_sprawdz(path: Path, cfg, project: str, oczekiwana_kamera: str | Non
     check("sigma" in szum, f"{path.name}: szum bez klucza sigma")
 
     cache_root = Path(cfg.cache_root)
-    for fr in data.get("klatki", []):
+    klatki = data.get("klatki") or []
+    role = sorted(fr.get("rola") for fr in klatki)
+    # pusta lista przeszlaby petle nizej bez ani jednej asercji
+    check(role == ["kafel", "najostrzejsza", "pierwsza"], f"{path.name}: klatki role={role}, oczekiwano pierwsza/najostrzejsza/kafel")
+    for fr in klatki:
         p = cache_root / fr["plik"]
         check(p.exists(), f"{path.name}: brak pliku klatki {p}")
         if p.exists():
@@ -178,6 +182,23 @@ def test_indeks_wariantow(tmp_root: Path) -> None:
     check(lokalny == baza / "DSCF9001.RAF", f"wariant obok pliku ma miec pierwszenstwo, jest {lokalny}")
 
 
+def test_kolizja_nazw_najblizszy_folder(tmp_root: Path) -> None:
+    """Regula A (Kuba 20.10): ta sama nazwa w dwoch dniach, kopia w
+    Obrobione/ danego dnia bez RAF obok - dostaje RAF z SWOJEGO dnia, nie
+    pierwszy alfabetycznie. Odtwarza przypadek z prawdziwego archiwum (dwa
+    dni zdjeciowe z tym samym numerem DSCF0047)."""
+    root = tmp_root / "kolizja"
+    for dzien in ("28.06.2025", "31.05.2025"):
+        (root / dzien / "Obrobione").mkdir(parents=True, exist_ok=True)
+        (root / dzien / "DSCF0047.JPG").write_bytes(b"")
+        (root / dzien / "DSCF0047.RAF").write_bytes(b"")
+        (root / dzien / "Obrobione" / "DSCF0047.jpg").write_bytes(b"")
+    idx = cmd_photo.zbuduj_indeks_wariantow([str(root)])
+    for dzien in ("28.06.2025", "31.05.2025"):
+        raf = cmd_photo._find_variant(root / dzien / "Obrobione", "DSCF0047", ("raf",), idx)
+        check(raf == root / dzien / "DSCF0047.RAF", f"{dzien}/Obrobione: RAF z {raf}, oczekiwano z {dzien}/")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="eyes_test_photo_") as tmp_s:
         tmp = Path(tmp_s)
@@ -204,6 +225,7 @@ def main() -> int:
 
         test_parowanie_i_pomijanie(tmp)
         test_indeks_wariantow(tmp)
+        test_kolizja_nazw_najblizszy_folder(tmp)
 
     if failures:
         print(f"TEST_PHOTO: FAIL ({len(failures)} problemow)")

@@ -46,7 +46,7 @@ PATTERNS_ASSETS = (
     "*.png", "*.jpg", "*.jpeg", "*.webp", "*.svg",
     "*.mp4", "*.mov",
 )
-# Sufiksy stemu do POMINIECIA calkowicie przy skanowaniu foto (_IG jest
+# Sufiksy stemu do POMINIECIA przy skanowaniu foto i obrazow w assetach (_IG jest
 # odnotowywany przez cmd_photo.measure_photo jako warianty.ig przy pomiarze
 # pliku bazowego - tu tylko wykluczany z listy PLIKOW DO ZMIERZENIA; _stock/
 # _export nie maja wlasnej sekcji w kontrakcie, sa to po prostu kopie do
@@ -112,8 +112,16 @@ def zbierz_foto(foldery: list[str]) -> list[Path]:
 
 def zbierz_assets(foldery: list[str]) -> list[Path]:
     """Jak zbierz(), ale dla assetow (audio+image+video mieszane w jednym
-    przemiale) - pomija tez warianty _IG/_stock/_export dla obrazow."""
-    candidates = [p for p in _zbierz_wg_wzorcow(foldery, PATTERNS_ASSETS) if not _ma_pominiety_sufiks(p.name)]
+    przemiale). Warianty _IG/_stock/_export pomija TYLKO dla obrazow (png/jpg/
+    webp/svg) - to kopie zdjecia bazowego. Audio i wideo z taka koncowka
+    (track_stock.wav, clip_export.mp4) to samodzielne pliki i sa mierzone
+    (decyzja Kuby 2026-10-20)."""
+    def pomin(p: Path) -> bool:
+        if not _ma_pominiety_sufiks(p.name):
+            return False
+        return cmd_asset._kind_for_ext(p.suffix.lower().lstrip(".")) in ("image", "svg")
+
+    candidates = [p for p in _zbierz_wg_wzorcow(foldery, PATTERNS_ASSETS) if not pomin(p)]
     return sorted(candidates, key=lambda p: str(p).replace("\\", "/"))
 
 
