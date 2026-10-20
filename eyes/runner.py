@@ -93,7 +93,12 @@ def start_detached(cmd: list[str], *, project: str, cache_root: Path, porcja: st
 
     popen_kwargs: dict = {}
     if os.name == "nt":
-        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        # CREATE_NO_WINDOW, nie DETACHED_PROCESS: proces bez konsoli sprawia, ze
+        # KAZDE jego dziecko konsolowe (ffmpeg/ffprobe na kazdy plik) dostaje
+        # nowa, WIDOCZNA konsole - przy przemiale okna wyskakiwaly co chwile.
+        # Ukryta konsola dziedziczy sie na dzieci, a proces dalej przezywa
+        # rodzica (osobna grupa procesow).
+        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
     else:
         popen_kwargs["start_new_session"] = True
 

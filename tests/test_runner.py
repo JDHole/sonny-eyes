@@ -149,6 +149,13 @@ def czesc_2_realny_batch(tmp: Path) -> None:
         time.sleep(2)
 
     check(status_koncowy == "zakonczony", f"_postep.json status koncowy={status_koncowy!r}, oczekiwano 'zakonczony'")
+    # sam status nie wystarczy: "zakonczony" daje tez przemial pustej listy
+    # (0 plikow) - --limit 2 --force ma dac dokladnie 2 realne pomiary
+    postep_koniec = runner_mod.read_json(postep_path) or {}
+    check(postep_koniec.get("plikow") == 2, f"_postep.json plikow={postep_koniec.get('plikow')}, oczekiwano 2 (--limit 2)")
+    check(postep_koniec.get("zrobione") == 2, f"_postep.json zrobione={postep_koniec.get('zrobione')}, oczekiwano 2")
+    check(postep_koniec.get("ok") == 2, f"_postep.json ok={postep_koniec.get('ok')}, oczekiwano 2 (--force mierzy oba)")
+    check(postep_koniec.get("bledy") == 0, f"_postep.json bledy={postep_koniec.get('bledy')}, oczekiwano 0")
     check(not psutil.pid_exists(pid) or not runner_mod.is_alive(info), f"proces batch {pid} nadal wyglada na zywy po zakonczeniu")
 
     log_path = runner_mod.batch_log_path(Path(out), project)
