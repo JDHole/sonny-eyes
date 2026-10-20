@@ -298,7 +298,7 @@ patrz `--lang` w sekcji "Konfiguracja").
 python tests/test_smoke.py
 ```
 
-Bramka bez pytest: pliki w `tests/` uruchamia się jako zwykłe skrypty. `test_smoke.py` sprawdza raporty z materiału autora, więc u siebie zacznij od `tests/test_config.py`, `tests/test_cli.py` i `tests/test_review_lang.py` (ten trzeci bez materiału autora kończy się czystym pominięciem, kodem 0). `tests/test_mcp.py` bez materiału autora sprawdza tylko listę narzędzi i `batch_status`, a część pomiarową pomija z komunikatem SKIP. To samo robią `test_runner.py`, `test_photo.py` i `test_asset.py`. Żeby zmierzyć własny materiał, skopiuj `tests/material.example.json` do `tests/material.local.json` (jest w `.gitignore`) i wpisz ścieżki do swojego klipu, zdjęć i pliku WAV, albo ustaw zmienne `EYES_TEST_<KLUCZ>`, np. `EYES_TEST_FUJI_FOLDER`.
+Bramka bez pytest: pliki w `tests/` uruchamia się jako zwykłe skrypty. `test_smoke.py` sprawdza raporty z materiału autora, więc u siebie zacznij od `tests/test_config.py`, `tests/test_cli.py` i `tests/test_review_lang.py` (ten trzeci bez materiału autora kończy się czystym pominięciem, kodem 0). `tests/test_mcp.py` bez materiału autora sprawdza listę narzędzi, błędy na złych wejściach, `measure_photo` i `measure_asset` na plikach generowanych w teście oraz przemiał zdjęć przez `batch_start`, a pomiar klipu pomija z komunikatem SKIP. `tests/test_review_media.py` nie potrzebuje materiału. To samo robią `test_runner.py`, `test_photo.py` i `test_asset.py`. Żeby zmierzyć własny materiał, skopiuj `tests/material.example.json` do `tests/material.local.json` (jest w `.gitignore`) i wpisz ścieżki do swojego klipu, zdjęć i pliku WAV, albo ustaw zmienne `EYES_TEST_<KLUCZ>`, np. `EYES_TEST_FUJI_FOLDER`.
 
 ## Dla agentów AI
 
@@ -330,15 +330,17 @@ Claude Desktop (`claude_desktop_config.json`):
 }
 ```
 
-Serwer wystawia osiem narzędzi:
+Serwer wystawia dziesięć narzędzi:
 
 | Narzędzie | Co robi |
 |---|---|
 | `probe_clip` | Zwraca parametry strumienia z ffprobe (kodek, rozdzielczość, fps, pix_fmt, zakres, długość) bez mierzenia czegokolwiek. |
 | `measure_clip` | Mierzy jeden klip i zapisuje raport ujęcia. |
+| `measure_photo` | Mierzy jedno zdjęcie (JPG, PNG, TIF, RAF), z EXIF-em, kadrem i wariantami. |
+| `measure_asset` | Mierzy jeden asset: audio, obraz albo wideo, według rozszerzenia. |
 | `get_report` | Zwraca gotowy raport JSON konkretnego klipu. |
 | `list_reports` | Wypisuje raporty istniejące w projekcie. |
-| `batch_start` | Startuje przemiał folderu jako proces w tle. |
+| `batch_start` | Startuje przemiał folderu jako proces w tle: wideo, zdjęcia albo assety (`kind`). |
 | `batch_status` | Zwraca postęp przemiału (zrobione, błędy, ETA). |
 | `batch_stop` | Zatrzymuje przemiał w tle. |
 | `review_page` | Buduje stronę przeglądu HTML dla projektu. |

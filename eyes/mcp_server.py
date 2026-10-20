@@ -46,13 +46,16 @@ sys.path.insert(0, str(REPO_ROOT))
 from mcp.server.mcpserver import MCPServer  # noqa: E402
 from mcp.server.mcpserver.exceptions import ToolError  # noqa: E402
 
-from eyes import cmd_measure, cmd_review  # noqa: E402
+from eyes import cmd_asset, cmd_measure, cmd_photo, cmd_review  # noqa: E402
 from eyes import keys as keys_mod  # noqa: E402
 from eyes import probe as probe_mod  # noqa: E402
 from eyes import runner as runner_mod  # noqa: E402
 from eyes.config import Config, ConfigError, load_config  # noqa: E402
 
 server = MCPServer("sonny-eyes")
+
+# batch_start(kind=...) - te same wartosci co `eyes batch --rodzaj`
+RODZAJE = ("video", "foto", "assets")
 
 
 def _cfg() -> Config:
@@ -98,7 +101,7 @@ def _quiet_stdout():
 def _resolve_existing(path: str) -> Path:
     p = Path(path)
     if not p.exists():
-        raise ToolError(f"clip not found: {path}")
+        raise ToolError(f"file not found: {path}")
     return p.resolve()
 
 
@@ -186,6 +189,103 @@ def measure_clip(
     return report
 
 
+def _measure_one(p: Path, project: str, force: bool, compact: bool, main_fn, extra_argv: list[str]) -> dict:
+    """Wspolna sciezka measure_photo/measure_asset: ten sam ksztalt wyniku co
+    measure_clip (raport z dysku + cached/report_path/frames_dir/scopes_dir).
+    main_fn to cmd_photo.main albo cmd_asset.main - te same funkcje, ktore
+    wola CLI (`eyes photo`/`eyes asset`), wiec MCP nie ma wlasnej logiki pomiaru."""
+    cfg = _cfg()
+    id_ = keys_mod.compute_id(p, [p])
+    report_path = cfg.reports_dir(project) / f"{id_}.json"
+    cache_root = Path(cfg.cache_root)
+
+    cached = report_path.exists() and not force
+    if not cached:
+        # stempel PRZED pomiarem: raport o tym samym id moze juz lezec od innego
+        # pliku (icon.png -> icon.json, potem icon.svg z force=True) - samo
+        # istnienie raportu po wywolaniu nie dowodzi, ze ten pomiar go zapisal
+        przed = report_path.stat().st_mtime_ns if report_path.exists() else None
+        argv = ["--project", project, "--files", str(p), *extra_argv]
+        if force:
+            argv.append("--force")
+        with _quiet_stdout():
+            rc = main_fn(argv)
+        if rc != 0:
+            raise ToolError(
+                f"measurement failed for {p} (exit={rc}; see _log.jsonl under "
+                f"{cache_root / project} for the error entry)"
+            )
+        if not report_path.exists() or report_path.stat().st_mtime_ns == przed:
+            # rc=0 bez raportu = plik pominiety (brak dekodera: .svg/.heic/.dng)
+            raise ToolError(f"no report written for {p}: skipped, no decoder for .{p.suffix.lower().lstrip('.')}")
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if compact:
+        report = _strip_profiles(report)
+    report["cached"] = cached
+    report["report_path"] = str(report_path)
+    report["frames_dir"] = str(cache_root / project / id_ / "frames")
+    report["scopes_dir"] = str(cache_root / project / id_ / "scopes")
+    return report
+
+
+@server.tool()
+def measure_photo(
+    path: str,
+    project: str = "default",
+    force: bool = False,
+    variant_folders: list[str] | None = None,
+    compact: bool = False,
+) -> dict:
+    """Measure one photo (JPG/PNG/TIF or Fuji RAF) and return the report exactly
+    as written to disk, plus report_path/frames_dir/scopes_dir - the still-image
+    counterpart of measure_clip, same as `python -m eyes photo`. Besides the
+    tonal/color/sharpness/noise numbers the report carries exif (camera, lens,
+    exposure), kadr (size, aspect ratio, orientation) and warianty (sibling RAF,
+    XMP develop settings, retouched _IG copy). A RAF with a JPG of the same name
+    next to it is measured from that JPG; a RAF alone from its embedded preview.
+    HEIC/DNG have no decoder and return a readable error. Takes a few seconds.
+    If a report already exists and force=False, it is returned with cached=true.
+
+    variant_folders: extra folders searched recursively for variants that do
+    not sit next to the photo (e.g. _IG copies kept in an "edited" folder).
+    werdykty is always null - judging the photo is a human call.
+    """
+    p = _resolve_existing(path)
+    extra = ["--warianty-root", *variant_folders] if variant_folders else []
+    return _measure_one(p, project, force, compact, cmd_photo.main, extra)
+
+
+@server.tool()
+def measure_asset(
+    path: str,
+    project: str = "default",
+    force: bool = False,
+    lut: str | None = None,
+    no_gpu: bool = False,
+    variant_folders: list[str] | None = None,
+    compact: bool = False,
+) -> dict:
+    """Measure one asset and return its report, dispatched by file extension
+    exactly like `python -m eyes asset`: audio (wav/mp3/m4a/flac/aac) gets
+    loudness (LUFS-I, LRA, true peak), leading/trailing silence and a waveform
+    image; images (png/jpg/jpeg/webp) are measured like measure_photo; video
+    (mp4/mov) like measure_clip (lut/no_gpu apply only to video). .svg has no
+    decoder and returns a readable error. Audio takes a few seconds, video up
+    to a minute. If a report already exists and force=False, it is returned
+    with cached=true. werdykty is always null.
+    """
+    p = _resolve_existing(path)
+    extra: list[str] = []
+    if lut:
+        extra += ["--lut", lut]
+    if no_gpu:
+        extra.append("--no-gpu")
+    if variant_folders:
+        extra += ["--warianty-root", *variant_folders]
+    return _measure_one(p, project, force, compact, cmd_asset.main, extra)
+
+
 @server.tool()
 def get_report(project: str, id: str, compact: bool = False) -> dict:  # noqa: A002 - "id" is the spec'd param name
     """Load one already-measured report from disk by project and id (the clip's
@@ -248,20 +348,30 @@ def batch_start(
     limit: int | None = None,
     force: bool = False,
     no_gpu: bool = False,
+    kind: str = "video",
 ) -> dict:
-    """Start measuring every camera clip under one or more folders (recursively)
-    as a detached background process, and return immediately with the
-    _runner.json contents (pid, cmd, log path, postep path) - it does NOT wait
-    for the batch to finish, which can take minutes to hours. Poll progress
-    with batch_status afterwards. Raises a readable error if a batch is
-    already running for this project - stop it first with batch_stop, or wait
-    for it to finish.
+    """Start measuring every file of one kind under one or more folders
+    (recursively) as a detached background process, and return immediately
+    with the _runner.json contents (pid, cmd, log path, postep path) - it does
+    NOT wait for the batch to finish, which can take minutes to hours. Poll
+    progress with batch_status afterwards. Raises a readable error if a batch
+    is already running for this project - stop it first with batch_stop, or
+    wait for it to finish.
+
+    kind, same as `python -m eyes batch --rodzaj`: "video" (default; camera
+    clips DSCF*.MOV, GX*/GH*/GOPR*.MP4), "foto" (JPG/RAF/PNG/TIF/DNG/HEIC, a
+    JPG+RAF pair measured once, variants looked up across all given folders)
+    or "assets" (audio + images + video mixed, dispatched per extension).
     """
+    if kind not in RODZAJE:
+        raise ToolError(f'unknown kind "{kind}" - use one of: {", ".join(RODZAJE)}')
+    if not folders:
+        raise ToolError("folders is empty - give at least one folder to scan")
     cfg = _cfg()
     cache_root = Path(cfg.cache_root)
-    argv = ["--project", project]
-    for f in folders:
-        argv += ["--folder", f]
+    # JEDNA flaga --folder z wszystkimi sciezkami: argparse w cmd_batch ma
+    # nargs="+", powtorzona flaga nadpisuje poprzednia (ta sama pulapka co w cli.py)
+    argv = ["--project", project, "--folder", *folders, "--rodzaj", kind]
     if porcja:
         argv += ["--porcja", porcja]
     if force:

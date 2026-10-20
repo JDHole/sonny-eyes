@@ -32,8 +32,9 @@ touches the source file, and never exports.
 ## Two ways to call it
 
 **MCP (preferred when available):** run `python -m eyes mcp` (stdio) and use
-its tools directly - `probe_clip`, `measure_clip`, `get_report`,
-`list_reports`, `batch_start`, `batch_status`, `batch_stop`, `review_page`.
+its tools directly - `probe_clip`, `measure_clip`, `measure_photo`,
+`measure_asset`, `get_report`, `list_reports`, `batch_start` (with `kind`:
+video/foto/assets), `batch_status`, `batch_stop`, `review_page`.
 See `docs/mcp.md` in this repo for client setup. This is the only way to get
 structured JSON back without parsing CLI stdout.
 

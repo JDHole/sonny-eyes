@@ -71,9 +71,11 @@ Settings):
 |---|---|
 | `probe_clip(path)` | Reads container/stream metadata (codec, resolution, frame rate, color info, duration, detected camera) via ffprobe - no decoding, under a second. |
 | `measure_clip(path, project, force, lut, compact)` | Runs the full ffmpeg/numpy/OpenCV measurement and returns the report (5-60s, or instant if a report already exists and `force` is false). |
+| `measure_photo(path, project, force, variant_folders, compact)` | Measures one photo (JPG/PNG/TIF, Fuji RAF) like `eyes photo`: the same numbers plus EXIF, framing and variants (RAF, XMP, `_IG`). A few seconds. |
+| `measure_asset(path, project, force, lut, no_gpu, variant_folders, compact)` | Measures one asset like `eyes asset`, by extension: audio (loudness, silence, waveform image), image (as `measure_photo`) or video (as `measure_clip`). |
 | `get_report(project, id, compact)` | Loads an already-measured report from disk by project and clip id, without re-measuring. |
 | `list_reports(project)` | Lists every report in a project as a short summary row (id, file, camera, duration, motion class, flags). |
-| `batch_start(project, folders, porcja, limit, force, no_gpu)` | Starts measuring every camera clip under one or more folders as a detached background process and returns immediately. |
+| `batch_start(project, folders, porcja, limit, force, no_gpu, kind)` | Starts measuring every file of one `kind` - `video` (default, camera clips), `foto` or `assets`, same as `eyes batch --rodzaj` - under one or more folders as a detached background process and returns immediately. |
 | `batch_status(project)` | Reports whether a detached batch is running and how far it got. |
 | `batch_stop(project)` | Kills a running detached batch for a project. |
 | `review_page(project, compact)` | Generates the HTML review page (thumbnails, numbers, flags) for a project and returns its path. |
